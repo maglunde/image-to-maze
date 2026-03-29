@@ -2,8 +2,13 @@ import type { Grid } from "../types";
 import type { GridPoint } from "../types";
 
 function normalizeDimension(value: number): number {
-  const safe = Math.max(5, Math.floor(value));
-  return safe % 2 === 0 ? safe + 1 : safe;
+  const safe = Math.min(200, Math.max(5, Math.floor(value)));
+
+  if (safe % 2 !== 0) {
+    return safe;
+  }
+
+  return safe === 200 ? 199 : safe + 1;
 }
 
 function randomOddWithin(limit: number): number {
@@ -99,53 +104,6 @@ export function generateMaze(width: number, height: number): Grid {
   grid[rows - 1][exitColumn] = 0;
 
   return grid;
-}
-
-export function invertGeneratedMaze(grid: Grid): Grid {
-  if (grid.length === 0 || grid[0].length === 0) {
-    return grid;
-  }
-
-  const rows = grid.length;
-  const columns = grid[0].length;
-  const openings: Array<{ row: number; column: number }> = [];
-
-  for (let column = 0; column < columns; column += 1) {
-    if (grid[0][column] === 0) {
-      openings.push({ row: 0, column });
-    }
-    if (grid[rows - 1][column] === 0) {
-      openings.push({ row: rows - 1, column });
-    }
-  }
-
-  for (let row = 1; row < rows - 1; row += 1) {
-    if (grid[row][0] === 0) {
-      openings.push({ row, column: 0 });
-    }
-    if (grid[row][columns - 1] === 0) {
-      openings.push({ row, column: columns - 1 });
-    }
-  }
-
-  const inverted = grid.map((row, rowIndex) =>
-    row.map((cell, columnIndex) => {
-      const isBoundary =
-        rowIndex === 0 || rowIndex === rows - 1 || columnIndex === 0 || columnIndex === columns - 1;
-
-      if (isBoundary) {
-        return 1;
-      }
-
-      return cell === 1 ? 0 : 1;
-    }),
-  );
-
-  for (const opening of openings.slice(0, 2)) {
-    inverted[opening.row][opening.column] = 0;
-  }
-
-  return inverted;
 }
 
 export function sealMazeBoundary(grid: Grid): Grid {

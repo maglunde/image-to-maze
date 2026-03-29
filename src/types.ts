@@ -5,6 +5,12 @@ export type GridPoint = {
   column: number;
 };
 
+export type PreviewColors = {
+  path: string;
+  wall: string;
+  walkable: string;
+};
+
 export type AnalysisOptions = {
   tileSize: number;
   threshold: number;

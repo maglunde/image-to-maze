@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { GridPreview } from "./components/GridPreview";
 import { ImageDropzone } from "./components/ImageDropzone";
-import type { AnalysisOptions, Grid, GridPoint } from "./types";
+import type { AnalysisOptions, Grid, GridPoint, PreviewColors } from "./types";
 import { analyzeMazeImage, estimateAnalysisOptions } from "./utils/imageProcessing";
-import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
+import { formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
 import {
   applyBoundaryOpenings,
   generateMaze,
   getBoundaryOpenings,
-  invertGeneratedMaze,
   moveBoundaryOpening,
   sealMazeBoundary,
 } from "./utils/mazeGenerator";
@@ -19,6 +18,12 @@ const defaultOptions: AnalysisOptions = {
   threshold: 128,
   invert: false,
   normalizePathWidth: true,
+};
+
+const defaultPreviewColors: PreviewColors = {
+  path: "#ef4444",
+  wall: "#0f172a",
+  walkable: "#ecfeff",
 };
 
 export default function App() {
@@ -37,6 +42,7 @@ export default function App() {
   const [isAutoTuning, setIsAutoTuning] = useState(false);
   const [showSourcePanels, setShowSourcePanels] = useState(false);
   const [showPath, setShowPath] = useState(true);
+  const [previewColors, setPreviewColors] = useState<PreviewColors>(defaultPreviewColors);
   const [mazeWidth, setMazeWidth] = useState(31);
   const [mazeHeight, setMazeHeight] = useState(31);
 
@@ -137,13 +143,13 @@ export default function App() {
 
     for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
       for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
-        context.fillStyle = grid[rowIndex][columnIndex] === 1 ? "#ecfeff" : "#0f172a";
+        context.fillStyle = grid[rowIndex][columnIndex] === 1 ? previewColors.wall : previewColors.walkable;
         context.fillRect(columnIndex, rowIndex, 1, 1);
       }
     }
 
     setGridPreviewUrl(canvas.toDataURL("image/png"));
-  }, [grid]);
+  }, [grid, previewColors]);
 
   useEffect(() => {
     return () => {
@@ -251,18 +257,6 @@ export default function App() {
     });
   };
 
-  const handleInvertGeneratedMaze = () => {
-    if (sourceMode !== "generated" || generatedBaseGrid.length === 0) {
-      return;
-    }
-
-    const nextBaseGrid = invertGeneratedMaze(generatedBaseGrid);
-    const nextGrid = applyBoundaryOpenings(nextBaseGrid, generatedOpenings);
-    setGeneratedBaseGrid(nextBaseGrid);
-    setGrid(nextGrid);
-    setPath(findMazePath(nextGrid));
-  };
-
   const handleMoveOpening = (openingIndex: number, target: GridPoint) => {
     if (sourceMode !== "generated" || generatedBaseGrid.length === 0 || generatedOpenings.length < 2) {
       return;
@@ -274,7 +268,9 @@ export default function App() {
     setPath(findMazePath(moved.grid));
   };
 
-  const asciiGrid = formatGridAsAscii(grid);
+  const pathPoints = new Set(
+    (showPath ? path ?? [] : []).map((point) => `${point.row}:${point.column}`),
+  );
   const matrixGrid = formatGridAsMatrix(grid);
   const gridRows = grid.length;
   const gridColumns = grid[0]?.length ?? 0;
@@ -292,122 +288,135 @@ export default function App() {
 
       <section className="workspace">
         <aside className="sidebar">
-          <section className="panel compact-panel">
-            <div className="section-head">
-              <h2>Fil</h2>
+          <details className="panel controls-panel collapsible-panel-shell" open>
+            <summary className="section-head collapsible-summary">
+              <div className="summary-title">
+                <span className="summary-caret" aria-hidden="true" />
+                <h2>Lag maze</h2>
+              </div>
+            </summary>
+
+            <div className="sidebar-group">
+              <label>
+                <div className="field-head">
+                  <span>Bredde</span>
+                  <strong>{mazeWidth}</strong>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="200"
+                  step="1"
+                  value={mazeWidth}
+                  onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
+                />
+              </label>
+
+              <label>
+                <div className="field-head">
+                  <span>Høyde</span>
+                  <strong>{mazeHeight}</strong>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="200"
+                  step="1"
+                  value={mazeHeight}
+                  onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
+                />
+              </label>
+
+              <button type="button" onClick={handleGenerateMaze}>
+                Lag maze
+              </button>
             </div>
-            <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
-          </section>
+          </details>
+
+          <details className="panel controls-panel collapsible-panel-shell" open>
+            <summary className="section-head collapsible-summary">
+              <div className="summary-title">
+                <span className="summary-caret" aria-hidden="true" />
+                <h2>Last opp maze</h2>
+              </div>
+            </summary>
+
+            <div className="sidebar-group">
+              <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
+            </div>
+
+            <div className="sidebar-divider" aria-hidden="true" />
+
+            <div className="sidebar-group">
+              <p className="sidebar-label">Analyseinnstillinger</p>
+              <label>
+                <span>Tile size</span>
+                <input
+                  type="range"
+                  min="2"
+                  max="16"
+                  value={options.tileSize}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      tileSize: Number(event.target.value),
+                    }))
+                  }
+                />
+                <strong>{options.tileSize}px</strong>
+              </label>
+
+              <label>
+                <span>Threshold</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="255"
+                  value={options.threshold}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      threshold: Number(event.target.value),
+                    }))
+                  }
+                />
+                <strong>{options.threshold}</strong>
+              </label>
+
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={options.invert}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      invert: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Invert</span>
+              </label>
+
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={options.normalizePathWidth}
+                  onChange={(event) =>
+                    setOptions((current) => ({
+                      ...current,
+                      normalizePathWidth: event.target.checked,
+                    }))
+                  }
+                />
+                <span>1-celle paths</span>
+              </label>
+            </div>
+          </details>
 
           <section className="panel controls-panel">
             <div className="section-head">
-              <h2>Lag Maze</h2>
+              <h2>Visning</h2>
             </div>
-
-            <label>
-              <span>Bredde</span>
-              <input
-                type="number"
-                min="5"
-                max="101"
-                step="1"
-                value={mazeWidth}
-                onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
-              />
-            </label>
-
-            <label>
-              <span>Høyde</span>
-              <input
-                type="number"
-                min="5"
-                max="101"
-                step="1"
-                value={mazeHeight}
-                onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
-              />
-            </label>
-
-            <button type="button" onClick={handleGenerateMaze}>
-              Lag maze
-            </button>
-
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={handleInvertGeneratedMaze}
-              disabled={sourceMode !== "generated" || grid.length === 0}
-            >
-              Invert maze
-            </button>
-          </section>
-
-          <section className="panel controls-panel">
-            <div className="section-head">
-              <h2>Innstillinger</h2>
-            </div>
-
-            <label>
-              <span>Tile size</span>
-              <input
-                type="range"
-                min="2"
-                max="16"
-                value={options.tileSize}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    tileSize: Number(event.target.value),
-                  }))
-                }
-              />
-              <strong>{options.tileSize}px</strong>
-            </label>
-
-            <label>
-              <span>Threshold</span>
-              <input
-                type="range"
-                min="0"
-                max="255"
-                value={options.threshold}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    threshold: Number(event.target.value),
-                  }))
-                }
-              />
-              <strong>{options.threshold}</strong>
-            </label>
-
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={options.invert}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    invert: event.target.checked,
-                  }))
-                }
-              />
-              <span>Invert</span>
-            </label>
-
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={options.normalizePathWidth}
-                onChange={(event) =>
-                  setOptions((current) => ({
-                    ...current,
-                    normalizePathWidth: event.target.checked,
-                  }))
-                }
-              />
-              <span>1-celle paths</span>
-            </label>
 
             <label className="checkbox">
               <input
@@ -416,6 +425,57 @@ export default function App() {
                 onChange={(event) => setShowPath(event.target.checked)}
               />
               <span>Show path</span>
+            </label>
+
+            <label className="color-field">
+              <span>Path</span>
+              <div className="color-input-row">
+                <input
+                  type="color"
+                  value={previewColors.path}
+                  onChange={(event) =>
+                    setPreviewColors((current) => ({
+                      ...current,
+                      path: event.target.value,
+                    }))
+                  }
+                />
+                <code>{previewColors.path}</code>
+              </div>
+            </label>
+
+            <label className="color-field">
+              <span>Vegger</span>
+              <div className="color-input-row">
+                <input
+                  type="color"
+                  value={previewColors.wall}
+                  onChange={(event) =>
+                    setPreviewColors((current) => ({
+                      ...current,
+                      wall: event.target.value,
+                    }))
+                  }
+                />
+                <code>{previewColors.wall}</code>
+              </div>
+            </label>
+
+            <label className="color-field">
+              <span>Åpen vei</span>
+              <div className="color-input-row">
+                <input
+                  type="color"
+                  value={previewColors.walkable}
+                  onChange={(event) =>
+                    setPreviewColors((current) => ({
+                      ...current,
+                      walkable: event.target.value,
+                    }))
+                  }
+                />
+                <code>{previewColors.walkable}</code>
+              </div>
             </label>
           </section>
 
@@ -431,17 +491,20 @@ export default function App() {
         </aside>
 
         <section className="content">
-          <section className="panel primary-preview">
-            <div className="section-head primary-head">
+          <details className="panel primary-preview collapsible-panel-shell" open>
+            <summary className="section-head primary-head collapsible-summary">
               <div>
-                <h2>Grid Preview</h2>
+                <div className="summary-title">
+                  <span className="summary-caret" aria-hidden="true" />
+                  <h2>Grid Preview</h2>
+                </div>
                 <p className="section-meta">
                   {gridRows > 0 && gridColumns > 0
                     ? `${gridRows} x ${gridColumns} cells`
                     : "Last opp et bilde for å generere grid."}
                 </p>
               </div>
-              <div className="action-row">
+              <div className="action-row" onClick={(event) => event.stopPropagation()}>
                 <button
                   type="button"
                   className="ghost-button"
@@ -458,17 +521,18 @@ export default function App() {
                   Bruk som input
                 </button>
               </div>
-            </div>
+            </summary>
             <GridPreview
               grid={grid}
               path={showPath ? path : null}
+              colors={previewColors}
               openings={openings}
               openingsDraggable={sourceMode === "generated"}
               onMoveOpening={handleMoveOpening}
               previewWidth={previewSize?.width}
               previewHeight={previewSize?.height}
             />
-          </section>
+          </details>
 
           {showSourcePanels ? (
             <section className="secondary-row">
@@ -505,18 +569,49 @@ export default function App() {
           ) : null}
 
           <section className="results-stack">
-            <article className="panel output-panel">
-              <div className="section-head">
-                <h2>ASCII</h2>
-              </div>
-              <pre>{asciiGrid || "Ingen ASCII tilgjengelig ennå."}</pre>
-            </article>
+            <details className="panel output-panel matrix-panel">
+              <summary className="output-header matrix-summary">
+                <div className="summary-title">
+                  <span className="summary-caret" aria-hidden="true" />
+                  <h2>ASCII</h2>
+                </div>
+              </summary>
+              <pre className="ascii-output" style={{ "--ascii-path-color": previewColors.path } as CSSProperties}>
+                {grid.length === 0
+                  ? "Ingen ASCII tilgjengelig ennå."
+                  : grid.map((row, rowIndex) => (
+                      <Fragment key={rowIndex}>
+                        {row.map((cell, columnIndex) => {
+                          const key = `${rowIndex}:${columnIndex}`;
+
+                          if (cell === 1) {
+                            return "#";
+                          }
+
+                          if (pathPoints.has(key)) {
+                            return (
+                              <span key={key} className="ascii-path-dot">
+                                .
+                              </span>
+                            );
+                          }
+
+                          return ".";
+                        })}
+                        {rowIndex < grid.length - 1 ? "\n" : null}
+                      </Fragment>
+                    ))}
+              </pre>
+              <p className="output-note">`#` vegg, `.` gang, rød `.` sti.</p>
+            </details>
 
             <details className="panel output-panel matrix-panel">
               <summary className="output-header matrix-summary">
-                <h2>Grid Matrix</h2>
+                <div className="summary-title">
+                  <span className="summary-caret" aria-hidden="true" />
+                  <h2>Grid Matrix</h2>
+                </div>
                 <div className="summary-actions">
-                  <span className="summary-hint">Kollapsbar</span>
                   <button type="button" onClick={handleCopy} disabled={grid.length === 0}>
                     Kopier som array
                   </button>

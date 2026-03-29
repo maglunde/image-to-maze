@@ -1,15 +1,30 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Grid, GridPoint } from "../types";
+import type { Grid, GridPoint, PreviewColors } from "../types";
 
 type GridPreviewProps = {
   grid: Grid;
   path?: GridPoint[] | null;
+  colors: PreviewColors;
   openings?: GridPoint[];
   openingsDraggable?: boolean;
   onMoveOpening?: (openingIndex: number, target: GridPoint) => void;
   previewWidth?: number;
   previewHeight?: number;
 };
+
+function hexToRgb(color: string): { red: number; green: number; blue: number } {
+  const normalized = color.replace("#", "");
+
+  if (normalized.length !== 6) {
+    return { red: 0, green: 0, blue: 0 };
+  }
+
+  return {
+    red: Number.parseInt(normalized.slice(0, 2), 16),
+    green: Number.parseInt(normalized.slice(2, 4), 16),
+    blue: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -18,6 +33,7 @@ function clamp(value: number, min: number, max: number): number {
 export function GridPreview({
   grid,
   path,
+  colors,
   openings = [],
   openingsDraggable = false,
   onMoveOpening,
@@ -59,6 +75,8 @@ export function GridPreview({
       sampleScale === 1 ? columns * renderCellSize : Math.max(1, Math.floor(columns / sampleScale));
     const pixelHeight =
       sampleScale === 1 ? rows * renderCellSize : Math.max(1, Math.floor(rows / sampleScale));
+    const wallColor = hexToRgb(colors.wall);
+    const walkableColor = hexToRgb(colors.walkable);
 
     canvas.width = pixelWidth;
     canvas.height = pixelHeight;
@@ -68,7 +86,7 @@ export function GridPreview({
     if (sampleScale === 1) {
       for (let row = 0; row < rows; row += 1) {
         for (let column = 0; column < columns; column += 1) {
-          context.fillStyle = grid[row][column] === 0 ? "#ecfeff" : "#0f172a";
+          context.fillStyle = grid[row][column] === 0 ? colors.walkable : colors.wall;
           context.fillRect(
             column * renderCellSize,
             row * renderCellSize,
@@ -87,13 +105,11 @@ export function GridPreview({
           const sourceColumn = Math.min(columns - 1, x * sampleScale);
           const value = grid[sourceRow][sourceColumn];
           const index = (y * pixelWidth + x) * 4;
-          const color = value === 0 ? 236 : 15;
-          const green = value === 0 ? 254 : 23;
-          const blue = value === 0 ? 255 : 42;
+          const currentColor = value === 0 ? walkableColor : wallColor;
 
-          imageData.data[index] = color;
-          imageData.data[index + 1] = green;
-          imageData.data[index + 2] = blue;
+          imageData.data[index] = currentColor.red;
+          imageData.data[index + 1] = currentColor.green;
+          imageData.data[index + 2] = currentColor.blue;
           imageData.data[index + 3] = 255;
         }
       }
@@ -104,7 +120,7 @@ export function GridPreview({
     if (path && path.length > 1) {
       const lineThickness = 2;
       const pointRadius = 2.5;
-      context.fillStyle = "#ff5a5f";
+      context.fillStyle = colors.path;
 
       const toPixelPoint = (row: number, column: number) => {
         if (sampleScale === 1) {
@@ -150,7 +166,7 @@ export function GridPreview({
       context.arc(endPoint.x, endPoint.y, pointRadius, 0, Math.PI * 2);
       context.fill();
     }
-  }, [grid, path, hasGrid]);
+  }, [colors.path, colors.walkable, colors.wall, grid, path, hasGrid]);
 
   const aspectWidth = previewWidth ?? columns;
   const aspectHeight = previewHeight ?? rows;
@@ -186,6 +202,29 @@ export function GridPreview({
       const bestDistance = (bestX - x) ** 2 + (bestY - y) ** 2;
       return candidateDistance < bestDistance ? candidate : best;
     });
+  };
+
+  const getNearestOpeningIndex = (target: GridPoint): number | null => {
+    if (openings.length < 2) {
+      return null;
+    }
+
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < openings.length; index += 1) {
+      const opening = openings[index];
+      const distance =
+        (opening.row - target.row) * (opening.row - target.row) +
+        (opening.column - target.column) * (opening.column - target.column);
+
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+
+    return bestIndex;
   };
 
   useEffect(() => {
@@ -231,8 +270,35 @@ export function GridPreview({
   }
 
   return (
-    <div className="grid-preview-shell">
-      <div ref={frameRef} className="grid-preview-frame" style={previewStyle}>
+    <div className="grid-preview-shell" style={{ background: colors.walkable }}>
+      <div
+        ref={frameRef}
+        className="grid-preview-frame"
+        style={previewStyle}
+        onPointerDown={(event) => {
+          if (!openingsDraggable || !onMoveOpening) {
+            return;
+          }
+
+          const targetElement = event.target as HTMLElement;
+
+          if (targetElement.closest(".opening-handle")) {
+            return;
+          }
+
+          const target = getBoundaryTarget(event.clientX, event.clientY);
+
+          if (!target) {
+            return;
+          }
+
+          const nearestOpeningIndex = getNearestOpeningIndex(target);
+
+          if (nearestOpeningIndex !== null) {
+            onMoveOpening(nearestOpeningIndex, target);
+          }
+        }}
+      >
         <canvas ref={canvasRef} className="grid-preview-canvas" />
         {openingsDraggable
           ? openings.slice(0, 2).map((opening, index) => {

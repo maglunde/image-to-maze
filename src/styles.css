@@ -134,9 +134,62 @@ button {
   gap: 12px;
 }
 
+.sidebar-group {
+  display: grid;
+  gap: 12px;
+}
+
+.sidebar-label {
+  margin: 0;
+  color: #8fa0b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(125, 211, 252, 0.28), rgba(148, 163, 184, 0.08));
+}
+
 .controls-panel label {
   display: grid;
   gap: 6px;
+}
+
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.color-field {
+  display: grid;
+  gap: 8px;
+}
+
+.color-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-input-row input[type="color"] {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-input-row code {
+  color: #8fa0b8;
+  font-family: "SFMono-Regular", "Consolas", monospace;
+  font-size: 0.82rem;
 }
 
 .checkbox {
@@ -341,9 +394,42 @@ button {
   gap: 12px;
 }
 
-.summary-hint {
+.summary-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
   color: #8fa0b8;
-  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
+
+.summary-caret::before {
+  content: "▸";
+}
+
+.matrix-panel[open] .summary-caret::before,
+.collapsible-panel-shell[open] .summary-caret::before {
+  content: "▾";
+}
+
+.collapsible-summary {
+  list-style: none;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-panel-shell[open] > .collapsible-summary {
+  margin-bottom: 12px;
 }
 
 .matrix-panel[open] .matrix-summary {
@@ -367,6 +453,14 @@ button {
   font-size: 0.84rem;
   line-height: 1.45;
   white-space: pre;
+}
+
+.ascii-output {
+  letter-spacing: 12px;
+}
+
+.ascii-path-dot {
+  color: var(--ascii-path-color, #ef4444);
 }
 
 .output-note {
