@@ -4,6 +4,14 @@ import { ImageDropzone } from "./components/ImageDropzone";
 import type { AnalysisOptions, Grid, GridPoint } from "./types";
 import { analyzeMazeImage, estimateAnalysisOptions } from "./utils/imageProcessing";
 import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
+import {
+  applyBoundaryOpenings,
+  generateMaze,
+  getBoundaryOpenings,
+  invertGeneratedMaze,
+  moveBoundaryOpening,
+  sealMazeBoundary,
+} from "./utils/mazeGenerator";
 import { findMazePath } from "./utils/pathfinding";
 
 const defaultOptions: AnalysisOptions = {
@@ -14,26 +22,46 @@ const defaultOptions: AnalysisOptions = {
 };
 
 export default function App() {
+  const [sourceMode, setSourceMode] = useState<"none" | "image" | "generated">("none");
   const [imageUrl, setImageUrl] = useState<string>("");
   const [processedUrl, setProcessedUrl] = useState<string>("");
   const [gridPreviewUrl, setGridPreviewUrl] = useState<string>("");
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
   const [grid, setGrid] = useState<Grid>([]);
+  const [generatedBaseGrid, setGeneratedBaseGrid] = useState<Grid>([]);
   const [path, setPath] = useState<GridPoint[] | null>(null);
+  const [generatedOpenings, setGeneratedOpenings] = useState<GridPoint[]>([]);
   const [options, setOptions] = useState<AnalysisOptions>(defaultOptions);
   const [error, setError] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAutoTuning, setIsAutoTuning] = useState(false);
   const [showSourcePanels, setShowSourcePanels] = useState(false);
   const [showPath, setShowPath] = useState(true);
+  const [mazeWidth, setMazeWidth] = useState(31);
+  const [mazeHeight, setMazeHeight] = useState(31);
 
   useEffect(() => {
+    if (sourceMode !== "image") {
+      if (sourceMode === "none") {
+        setProcessedUrl("");
+        setGridPreviewUrl("");
+        setPreviewSize(null);
+        setGrid([]);
+        setGeneratedBaseGrid([]);
+        setPath(null);
+        setGeneratedOpenings([]);
+      }
+      return;
+    }
+
     if (!imageUrl) {
       setProcessedUrl("");
       setGridPreviewUrl("");
       setPreviewSize(null);
       setGrid([]);
+      setGeneratedBaseGrid([]);
       setPath(null);
+      setGeneratedOpenings([]);
       return;
     }
 
@@ -50,7 +78,9 @@ export default function App() {
           setProcessedUrl(result.processedDataUrl);
           setPreviewSize({ width: result.width, height: result.height });
           setGrid(result.grid);
+          setGeneratedBaseGrid([]);
           setPath(findMazePath(result.grid));
+          setGeneratedOpenings([]);
         }
       } catch (analysisError) {
         if (!cancelled) {
@@ -61,7 +91,9 @@ export default function App() {
           setGridPreviewUrl("");
           setPreviewSize(null);
           setGrid([]);
+          setGeneratedBaseGrid([]);
           setPath(null);
+          setGeneratedOpenings([]);
         }
       } finally {
         if (!cancelled) {
@@ -75,7 +107,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [imageUrl, options]);
+  }, [imageUrl, options, sourceMode]);
 
   useEffect(() => {
     if (grid.length === 0) {
@@ -127,7 +159,10 @@ export default function App() {
     setError("");
     setProcessedUrl("");
     setGrid([]);
+    setGeneratedBaseGrid([]);
+    setGeneratedOpenings([]);
     setIsAutoTuning(true);
+    setSourceMode("image");
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -163,6 +198,7 @@ export default function App() {
 
     setError("");
     setGrid([]);
+    setSourceMode("image");
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -179,6 +215,7 @@ export default function App() {
 
     setError("");
     setGrid([]);
+    setSourceMode("image");
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -188,10 +225,60 @@ export default function App() {
     });
   };
 
+  const handleGenerateMaze = () => {
+    const rawMaze = generateMaze(mazeWidth, mazeHeight);
+    const openings = getBoundaryOpenings(rawMaze).slice(0, 2);
+    const baseGrid = sealMazeBoundary(rawMaze);
+    const nextMaze = applyBoundaryOpenings(baseGrid, openings);
+
+    setError("");
+    setIsAutoTuning(false);
+    setIsProcessing(false);
+    setSourceMode("generated");
+    setShowSourcePanels(false);
+    setProcessedUrl("");
+    setPreviewSize({ width: nextMaze[0].length, height: nextMaze.length });
+    setGeneratedBaseGrid(baseGrid);
+    setGrid(nextMaze);
+    setPath(findMazePath(nextMaze));
+    setGeneratedOpenings(openings);
+    setImageUrl((previousUrl) => {
+      if (previousUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previousUrl);
+      }
+
+      return "";
+    });
+  };
+
+  const handleInvertGeneratedMaze = () => {
+    if (sourceMode !== "generated" || generatedBaseGrid.length === 0) {
+      return;
+    }
+
+    const nextBaseGrid = invertGeneratedMaze(generatedBaseGrid);
+    const nextGrid = applyBoundaryOpenings(nextBaseGrid, generatedOpenings);
+    setGeneratedBaseGrid(nextBaseGrid);
+    setGrid(nextGrid);
+    setPath(findMazePath(nextGrid));
+  };
+
+  const handleMoveOpening = (openingIndex: number, target: GridPoint) => {
+    if (sourceMode !== "generated" || generatedBaseGrid.length === 0 || generatedOpenings.length < 2) {
+      return;
+    }
+
+    const moved = moveBoundaryOpening(generatedBaseGrid, generatedOpenings, openingIndex, target);
+    setGeneratedOpenings(moved.openings);
+    setGrid(moved.grid);
+    setPath(findMazePath(moved.grid));
+  };
+
   const asciiGrid = formatGridAsAscii(grid);
   const matrixGrid = formatGridAsMatrix(grid);
   const gridRows = grid.length;
   const gridColumns = grid[0]?.length ?? 0;
+  const openings = sourceMode === "generated" ? generatedOpenings : [];
 
   return (
     <main className="app-shell">
@@ -210,6 +297,49 @@ export default function App() {
               <h2>Fil</h2>
             </div>
             <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
+          </section>
+
+          <section className="panel controls-panel">
+            <div className="section-head">
+              <h2>Lag Maze</h2>
+            </div>
+
+            <label>
+              <span>Bredde</span>
+              <input
+                type="number"
+                min="5"
+                max="101"
+                step="1"
+                value={mazeWidth}
+                onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
+              />
+            </label>
+
+            <label>
+              <span>Høyde</span>
+              <input
+                type="number"
+                min="5"
+                max="101"
+                step="1"
+                value={mazeHeight}
+                onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
+              />
+            </label>
+
+            <button type="button" onClick={handleGenerateMaze}>
+              Lag maze
+            </button>
+
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleInvertGeneratedMaze}
+              disabled={sourceMode !== "generated" || grid.length === 0}
+            >
+              Invert maze
+            </button>
           </section>
 
           <section className="panel controls-panel">
@@ -332,6 +462,9 @@ export default function App() {
             <GridPreview
               grid={grid}
               path={showPath ? path : null}
+              openings={openings}
+              openingsDraggable={sourceMode === "generated"}
+              onMoveOpening={handleMoveOpening}
               previewWidth={previewSize?.width}
               previewHeight={previewSize?.height}
             />

@@ -323,11 +323,10 @@ function solveWithPolarity(
 
 export function findMazePath(grid: Grid): GridPoint[] | null {
   const normalPath = solveWithPolarity(grid, 1, 0);
-  const invertedPath = solveWithPolarity(grid, 0, 1);
 
-  if (normalPath && invertedPath) {
-    return normalPath.length >= invertedPath.length ? normalPath : invertedPath;
+  if (normalPath) {
+    return normalPath;
   }
 
-  return normalPath ?? invertedPath;
+  return solveWithPolarity(grid, 0, 1);
 }

@@ -1,25 +1,42 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Grid, GridPoint } from "../types";
 
 type GridPreviewProps = {
   grid: Grid;
   path?: GridPoint[] | null;
+  openings?: GridPoint[];
+  openingsDraggable?: boolean;
+  onMoveOpening?: (openingIndex: number, target: GridPoint) => void;
   previewWidth?: number;
   previewHeight?: number;
 };
 
-export function GridPreview({ grid, path, previewWidth, previewHeight }: GridPreviewProps) {
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+export function GridPreview({
+  grid,
+  path,
+  openings = [],
+  openingsDraggable = false,
+  onMoveOpening,
+  previewWidth,
+  previewHeight,
+}: GridPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [activeOpeningIndex, setActiveOpeningIndex] = useState<number | null>(null);
+  const hasGrid = grid.length > 0 && (grid[0]?.length ?? 0) > 0;
+  const columns = hasGrid ? grid[0].length : 1;
+  const rows = hasGrid ? grid.length : 1;
 
   useEffect(() => {
     const canvas = canvasRef.current;
 
-    if (!canvas || grid.length === 0 || grid[0].length === 0) {
+    if (!canvas || !hasGrid) {
       return;
     }
-
-    const rows = grid.length;
-    const columns = grid[0].length;
     const context = canvas.getContext("2d");
 
     if (!context) {
@@ -51,7 +68,7 @@ export function GridPreview({ grid, path, previewWidth, previewHeight }: GridPre
     if (sampleScale === 1) {
       for (let row = 0; row < rows; row += 1) {
         for (let column = 0; column < columns; column += 1) {
-          context.fillStyle = grid[row][column] === 1 ? "#ecfeff" : "#0f172a";
+          context.fillStyle = grid[row][column] === 0 ? "#ecfeff" : "#0f172a";
           context.fillRect(
             column * renderCellSize,
             row * renderCellSize,
@@ -70,9 +87,9 @@ export function GridPreview({ grid, path, previewWidth, previewHeight }: GridPre
           const sourceColumn = Math.min(columns - 1, x * sampleScale);
           const value = grid[sourceRow][sourceColumn];
           const index = (y * pixelWidth + x) * 4;
-          const color = value === 1 ? 236 : 15;
-          const green = value === 1 ? 254 : 23;
-          const blue = value === 1 ? 255 : 42;
+          const color = value === 0 ? 236 : 15;
+          const green = value === 0 ? 254 : 23;
+          const blue = value === 0 ? 255 : 42;
 
           imageData.data[index] = color;
           imageData.data[index + 1] = green;
@@ -133,24 +150,109 @@ export function GridPreview({ grid, path, previewWidth, previewHeight }: GridPre
       context.arc(endPoint.x, endPoint.y, pointRadius, 0, Math.PI * 2);
       context.fill();
     }
-  }, [grid, path]);
+  }, [grid, path, hasGrid]);
 
-  if (grid.length === 0) {
-    return <div className="empty-state">Ingen grid tilgjengelig ennå.</div>;
-  }
-
-  const columns = grid[0].length;
-  const rows = grid.length;
   const aspectWidth = previewWidth ?? columns;
   const aspectHeight = previewHeight ?? rows;
   const previewStyle = {
     "--preview-ratio": String(aspectWidth / aspectHeight),
   } as CSSProperties;
 
+  const getBoundaryTarget = (clientX: number, clientY: number): GridPoint | null => {
+    const frame = frameRef.current;
+
+    if (!frame) {
+      return null;
+    }
+
+    const rect = frame.getBoundingClientRect();
+    const x = clamp(clientX - rect.left, 0, rect.width);
+    const y = clamp(clientY - rect.top, 0, rect.height);
+    const row = clamp(Math.round((y / rect.height) * rows - 0.5), 0, rows - 1);
+    const column = clamp(Math.round((x / rect.width) * columns - 0.5), 0, columns - 1);
+    const candidates = [
+      { row: 0, column },
+      { row: rows - 1, column },
+      { row, column: 0 },
+      { row, column: columns - 1 },
+    ];
+
+    return candidates.reduce((best, candidate) => {
+      const candidateX = ((candidate.column + 0.5) / columns) * rect.width;
+      const candidateY = ((candidate.row + 0.5) / rows) * rect.height;
+      const bestX = ((best.column + 0.5) / columns) * rect.width;
+      const bestY = ((best.row + 0.5) / rows) * rect.height;
+      const candidateDistance = (candidateX - x) ** 2 + (candidateY - y) ** 2;
+      const bestDistance = (bestX - x) ** 2 + (bestY - y) ** 2;
+      return candidateDistance < bestDistance ? candidate : best;
+    });
+  };
+
+  useEffect(() => {
+    if (activeOpeningIndex === null || !openingsDraggable || !onMoveOpening) {
+      return;
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const target = getBoundaryTarget(event.clientX, event.clientY);
+
+      if (target) {
+        onMoveOpening(activeOpeningIndex, target);
+      }
+
+      setActiveOpeningIndex(null);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const target = getBoundaryTarget(event.clientX, event.clientY);
+
+      if (target) {
+        onMoveOpening(activeOpeningIndex, target);
+      }
+    };
+
+    const handlePointerCancel = () => {
+      setActiveOpeningIndex(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+    };
+  }, [activeOpeningIndex, onMoveOpening, openingsDraggable, rows, columns]);
+
+  if (!hasGrid) {
+    return <div className="empty-state">Ingen grid tilgjengelig ennå.</div>;
+  }
+
   return (
     <div className="grid-preview-shell">
-      <div className="grid-preview-frame" style={previewStyle}>
+      <div ref={frameRef} className="grid-preview-frame" style={previewStyle}>
         <canvas ref={canvasRef} className="grid-preview-canvas" />
+        {openingsDraggable
+          ? openings.slice(0, 2).map((opening, index) => {
+              const markerStyle = {
+                left: `${((opening.column + 0.5) / columns) * 100}%`,
+                top: `${((opening.row + 0.5) / rows) * 100}%`,
+              };
+
+              return (
+                <button
+                  key={`${opening.row}-${opening.column}-${index}`}
+                  type="button"
+                  className={`opening-handle ${activeOpeningIndex === index ? "is-dragging" : ""}`}
+                  style={markerStyle}
+                  onPointerDown={() => setActiveOpeningIndex(index)}
+                  title={index === 0 ? "Dra inngangen" : "Dra utgangen"}
+                />
+              );
+            })
+          : null}
       </div>
     </div>
   );
