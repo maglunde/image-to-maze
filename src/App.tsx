@@ -3,7 +3,7 @@ import { GridPreview } from "./components/GridPreview";
 import { ImageDropzone } from "./components/ImageDropzone";
 import type { AnalysisOptions, Grid, GridPoint, PreviewColors } from "./types";
 import { analyzeMazeImage, estimateAnalysisOptions } from "./utils/imageProcessing";
-import { formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
+import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
 import {
   applyBoundaryOpenings,
   generateMaze,
@@ -27,6 +27,7 @@ const defaultPreviewColors: PreviewColors = {
 };
 
 export default function App() {
+  const [inputTab, setInputTab] = useState<"generate" | "upload">("generate");
   const [sourceMode, setSourceMode] = useState<"none" | "image" | "generated">("none");
   const [imageUrl, setImageUrl] = useState<string>("");
   const [processedUrl, setProcessedUrl] = useState<string>("");
@@ -168,6 +169,7 @@ export default function App() {
     setGeneratedBaseGrid([]);
     setGeneratedOpenings([]);
     setIsAutoTuning(true);
+    setInputTab("upload");
     setSourceMode("image");
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
@@ -189,11 +191,11 @@ export default function App() {
       });
   };
 
-  const handleCopy = async () => {
+  const copyToClipboard = async (value: string, errorMessage: string) => {
     try {
-      await navigator.clipboard.writeText(formatGridAsJson(grid));
+      await navigator.clipboard.writeText(value);
     } catch {
-      setError("Kunne ikke kopiere grid til utklippstavlen.");
+      setError(errorMessage);
     }
   };
 
@@ -238,6 +240,7 @@ export default function App() {
     const nextMaze = applyBoundaryOpenings(baseGrid, openings);
 
     setError("");
+    setInputTab("generate");
     setIsAutoTuning(false);
     setIsProcessing(false);
     setSourceMode("generated");
@@ -271,10 +274,16 @@ export default function App() {
   const pathPoints = new Set(
     (showPath ? path ?? [] : []).map((point) => `${point.row}:${point.column}`),
   );
+  const asciiGrid = formatGridAsAscii(grid);
   const matrixGrid = formatGridAsMatrix(grid);
   const gridRows = grid.length;
   const gridColumns = grid[0]?.length ?? 0;
   const openings = sourceMode === "generated" ? generatedOpenings : [];
+  const hasSourceImages = Boolean(imageUrl || processedUrl);
+  const isPreviewBusy = sourceMode === "image" && (isProcessing || isAutoTuning);
+  const previewStatus = isAutoTuning
+    ? "Finner gode standardinnstillinger for bildet..."
+    : "Prosesserer bilde...";
 
   return (
     <main className="app-shell">
@@ -287,132 +296,242 @@ export default function App() {
       </section>
 
       <section className="workspace">
-        <aside className="sidebar">
-          <details className="panel controls-panel collapsible-panel-shell" open>
-            <summary className="section-head collapsible-summary">
-              <div className="summary-title">
-                <span className="summary-caret" aria-hidden="true" />
-                <h2>Lag maze</h2>
-              </div>
-            </summary>
+        <aside className="sidebar input-column">
+          <section className="panel controls-panel input-panel">
+            <div className="section-head">
+              <h2>Input</h2>
+            </div>
 
-            <div className="sidebar-group">
-              <label>
-                <div className="field-head">
-                  <span>Bredde</span>
-                  <strong>{mazeWidth}</strong>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="200"
-                  step="1"
-                  value={mazeWidth}
-                  onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
-                />
-              </label>
-
-              <label>
-                <div className="field-head">
-                  <span>Høyde</span>
-                  <strong>{mazeHeight}</strong>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="200"
-                  step="1"
-                  value={mazeHeight}
-                  onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
-                />
-              </label>
-
-              <button type="button" onClick={handleGenerateMaze}>
+            <div className="tab-row" role="tablist" aria-label="Input-modus">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inputTab === "generate"}
+                className={`tab-button ${inputTab === "generate" ? "is-active" : ""}`}
+                onClick={() => setInputTab("generate")}
+              >
                 Lag maze
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={inputTab === "upload"}
+                className={`tab-button ${inputTab === "upload" ? "is-active" : ""}`}
+                onClick={() => setInputTab("upload")}
+              >
+                Last opp
+              </button>
             </div>
-          </details>
 
-          <details className="panel controls-panel collapsible-panel-shell" open>
-            <summary className="section-head collapsible-summary">
-              <div className="summary-title">
-                <span className="summary-caret" aria-hidden="true" />
-                <h2>Last opp maze</h2>
+            {inputTab === "generate" ? (
+              <div className="sidebar-group">
+                <label>
+                  <div className="field-head">
+                    <span>Bredde</span>
+                    <strong>{mazeWidth}</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="200"
+                    step="1"
+                    value={mazeWidth}
+                    onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
+                  />
+                </label>
+
+                <label>
+                  <div className="field-head">
+                    <span>Høyde</span>
+                    <strong>{mazeHeight}</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="200"
+                    step="1"
+                    value={mazeHeight}
+                    onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
+                  />
+                </label>
+
+                <button type="button" onClick={handleGenerateMaze}>
+                  Lag maze
+                </button>
               </div>
-            </summary>
+            ) : (
+              <div className="sidebar-group">
+                <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
 
-            <div className="sidebar-group">
-              <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
+                {imageUrl ? (
+                  <>
+                    <div className="sidebar-divider" aria-hidden="true" />
+
+                    <div className="sidebar-group">
+                      <p className="sidebar-label">Analyseinnstillinger</p>
+                      <label>
+                        <div className="field-head">
+                          <span>Tile size</span>
+                          <strong>{options.tileSize}px</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="2"
+                          max="16"
+                          value={options.tileSize}
+                          onChange={(event) =>
+                            setOptions((current) => ({
+                              ...current,
+                              tileSize: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        <div className="field-head">
+                          <span>Threshold</span>
+                          <strong>{options.threshold}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="255"
+                          value={options.threshold}
+                          onChange={(event) =>
+                            setOptions((current) => ({
+                              ...current,
+                              threshold: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          checked={options.invert}
+                          onChange={(event) =>
+                            setOptions((current) => ({
+                              ...current,
+                              invert: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>Invert</span>
+                      </label>
+
+                      <label className="checkbox">
+                        <input
+                          type="checkbox"
+                          checked={options.normalizePathWidth}
+                          onChange={(event) =>
+                            setOptions((current) => ({
+                              ...current,
+                              normalizePathWidth: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>1-celle paths</span>
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <p className="panel-note">Analyseinnstillinger vises når et bilde er lastet opp.</p>
+                )}
+              </div>
+            )}
+          </section>
+
+          {error ? <section className="panel compact-panel error">{error}</section> : null}
+        </aside>
+
+        <section className="content preview-column">
+          <section className="panel primary-preview">
+            <div className="section-head primary-head">
+              <div>
+                <h2>Grid Preview</h2>
+                <p className="section-meta">
+                  {gridRows > 0 && gridColumns > 0
+                    ? `${gridRows} x ${gridColumns} cells`
+                    : "Last opp et bilde eller generer et maze for å starte."}
+                </p>
+              </div>
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setShowSourcePanels((current) => !current)}
+                  disabled={!hasSourceImages}
+                >
+                  {showSourcePanels ? "Skjul kilder" : "Vis kilder"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={handleUseGridAsInput}
+                  disabled={!gridPreviewUrl || isProcessing}
+                >
+                  Bruk som input
+                </button>
+              </div>
             </div>
 
-            <div className="sidebar-divider" aria-hidden="true" />
+            <div className="preview-stage">
+            <GridPreview
+              grid={grid}
+              path={showPath ? path : null}
+              colors={previewColors}
+              openings={showPath ? openings : []}
+              openingsDraggable={showPath && sourceMode === "generated"}
+              onMoveOpening={handleMoveOpening}
+              previewWidth={previewSize?.width}
+              previewHeight={previewSize?.height}
+              />
 
-            <div className="sidebar-group">
-              <p className="sidebar-label">Analyseinnstillinger</p>
-              <label>
-                <span>Tile size</span>
-                <input
-                  type="range"
-                  min="2"
-                  max="16"
-                  value={options.tileSize}
-                  onChange={(event) =>
-                    setOptions((current) => ({
-                      ...current,
-                      tileSize: Number(event.target.value),
-                    }))
-                  }
-                />
-                <strong>{options.tileSize}px</strong>
-              </label>
-
-              <label>
-                <span>Threshold</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="255"
-                  value={options.threshold}
-                  onChange={(event) =>
-                    setOptions((current) => ({
-                      ...current,
-                      threshold: Number(event.target.value),
-                    }))
-                  }
-                />
-                <strong>{options.threshold}</strong>
-              </label>
-
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={options.invert}
-                  onChange={(event) =>
-                    setOptions((current) => ({
-                      ...current,
-                      invert: event.target.checked,
-                    }))
-                  }
-                />
-                <span>Invert</span>
-              </label>
-
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={options.normalizePathWidth}
-                  onChange={(event) =>
-                    setOptions((current) => ({
-                      ...current,
-                      normalizePathWidth: event.target.checked,
-                    }))
-                  }
-                />
-                <span>1-celle paths</span>
-              </label>
+              {isPreviewBusy ? (
+                <div className="preview-processing-overlay">
+                  <div className="processing-chip">
+                    <span className="processing-dot" aria-hidden="true" />
+                    {previewStatus}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          </details>
+          </section>
 
+          {showSourcePanels && hasSourceImages ? (
+            <section className="source-strip">
+              {imageUrl ? (
+                <article className="panel collapsible-panel source-card">
+                  <div className="section-head">
+                    <h2>Original</h2>
+                  </div>
+                  <img src={imageUrl} alt="Original maze upload" className="preview-image" />
+                </article>
+              ) : null}
+
+              {processedUrl ? (
+                <article className="panel collapsible-panel source-card">
+                  <div className="section-head">
+                    <h2>Processed B/W</h2>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={handleUseProcessedAsInput}
+                      disabled={!processedUrl || isProcessing}
+                    >
+                      Bruk som input
+                    </button>
+                  </div>
+                  <img src={processedUrl} alt="Processed maze" className="preview-image" />
+                </article>
+              ) : null}
+            </section>
+          ) : null}
+        </section>
+
+        <aside className="output-column">
           <section className="panel controls-panel">
             <div className="section-head">
               <h2>Visning</h2>
@@ -427,11 +546,11 @@ export default function App() {
               <span>Show path</span>
             </label>
 
-            <label className="color-field">
-              <span>Path</span>
-              <div className="color-input-row">
+            <div className="swatch-grid">
+              <label className="swatch-field">
                 <input
                   type="color"
+                  aria-label="Path-farge"
                   value={previewColors.path}
                   onChange={(event) =>
                     setPreviewColors((current) => ({
@@ -440,15 +559,13 @@ export default function App() {
                     }))
                   }
                 />
-                <code>{previewColors.path}</code>
-              </div>
-            </label>
+                <span>Path</span>
+              </label>
 
-            <label className="color-field">
-              <span>Vegger</span>
-              <div className="color-input-row">
+              <label className="swatch-field">
                 <input
                   type="color"
+                  aria-label="Veggfarge"
                   value={previewColors.wall}
                   onChange={(event) =>
                     setPreviewColors((current) => ({
@@ -457,15 +574,13 @@ export default function App() {
                     }))
                   }
                 />
-                <code>{previewColors.wall}</code>
-              </div>
-            </label>
+                <span>Vegger</span>
+              </label>
 
-            <label className="color-field">
-              <span>Åpen vei</span>
-              <div className="color-input-row">
+              <label className="swatch-field">
                 <input
                   type="color"
+                  aria-label="Farge for åpen vei"
                   value={previewColors.walkable}
                   onChange={(event) =>
                     setPreviewColors((current) => ({
@@ -474,99 +589,10 @@ export default function App() {
                     }))
                   }
                 />
-                <code>{previewColors.walkable}</code>
-              </div>
-            </label>
+                <span>Åpen vei</span>
+              </label>
+            </div>
           </section>
-
-          {(error || isProcessing || isAutoTuning) && (
-            <section className={`panel compact-panel ${error ? "error" : "status-panel"}`}>
-              {error
-                ? error
-                : isAutoTuning
-                  ? "Finner gode standardinnstillinger for bildet..."
-                  : "Prosesserer bilde..."}
-            </section>
-          )}
-        </aside>
-
-        <section className="content">
-          <details className="panel primary-preview collapsible-panel-shell" open>
-            <summary className="section-head primary-head collapsible-summary">
-              <div>
-                <div className="summary-title">
-                  <span className="summary-caret" aria-hidden="true" />
-                  <h2>Grid Preview</h2>
-                </div>
-                <p className="section-meta">
-                  {gridRows > 0 && gridColumns > 0
-                    ? `${gridRows} x ${gridColumns} cells`
-                    : "Last opp et bilde for å generere grid."}
-                </p>
-              </div>
-              <div className="action-row" onClick={(event) => event.stopPropagation()}>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setShowSourcePanels((current) => !current)}
-                >
-                  {showSourcePanels ? "Skjul kildebilder" : "Vis kildebilder"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={handleUseGridAsInput}
-                  disabled={!gridPreviewUrl || isProcessing}
-                >
-                  Bruk som input
-                </button>
-              </div>
-            </summary>
-            <GridPreview
-              grid={grid}
-              path={showPath ? path : null}
-              colors={previewColors}
-              openings={openings}
-              openingsDraggable={sourceMode === "generated"}
-              onMoveOpening={handleMoveOpening}
-              previewWidth={previewSize?.width}
-              previewHeight={previewSize?.height}
-            />
-          </details>
-
-          {showSourcePanels ? (
-            <section className="secondary-row">
-              <article className="panel collapsible-panel">
-                <div className="section-head">
-                  <h2>Original</h2>
-                </div>
-                {imageUrl ? (
-                  <img src={imageUrl} alt="Original maze upload" className="preview-image" />
-                ) : (
-                  <div className="empty-state">Ingen bilde lastet opp.</div>
-                )}
-              </article>
-
-              <article className="panel collapsible-panel">
-                <div className="section-head">
-                  <h2>Processed B/W</h2>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={handleUseProcessedAsInput}
-                    disabled={!processedUrl || isProcessing}
-                  >
-                    Bruk som input
-                  </button>
-                </div>
-                {processedUrl ? (
-                  <img src={processedUrl} alt="Processed maze" className="preview-image" />
-                ) : (
-                  <div className="empty-state">Ingen prosessert versjon ennå.</div>
-                )}
-              </article>
-            </section>
-          ) : null}
 
           <section className="results-stack">
             <details className="panel output-panel matrix-panel">
@@ -574,6 +600,19 @@ export default function App() {
                 <div className="summary-title">
                   <span className="summary-caret" aria-hidden="true" />
                   <h2>ASCII</h2>
+                </div>
+                <div className="summary-actions">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void copyToClipboard(asciiGrid, "Kunne ikke kopiere ASCII til utklippstavlen.");
+                    }}
+                    disabled={grid.length === 0}
+                  >
+                    Kopier
+                  </button>
                 </div>
               </summary>
               <pre className="ascii-output" style={{ "--ascii-path-color": previewColors.path } as CSSProperties}>
@@ -602,7 +641,7 @@ export default function App() {
                       </Fragment>
                     ))}
               </pre>
-              <p className="output-note">`#` vegg, `.` gang, rød `.` sti.</p>
+              <p className="output-note">`#` vegg, `.` gang, farget `.` sti.</p>
             </details>
 
             <details className="panel output-panel matrix-panel">
@@ -612,8 +651,19 @@ export default function App() {
                   <h2>Grid Matrix</h2>
                 </div>
                 <div className="summary-actions">
-                  <button type="button" onClick={handleCopy} disabled={grid.length === 0}>
-                    Kopier som array
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void copyToClipboard(
+                        formatGridAsJson(grid),
+                        "Kunne ikke kopiere grid til utklippstavlen.",
+                      );
+                    }}
+                    disabled={grid.length === 0}
+                  >
+                    Kopier
                   </button>
                 </div>
               </summary>
@@ -621,7 +671,7 @@ export default function App() {
               <p className="output-note">Vises som matrise for lesbarhet, kopieres som gyldig 2D-array.</p>
             </details>
           </section>
-        </section>
+        </aside>
       </section>
     </main>
   );
