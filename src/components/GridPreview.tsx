@@ -6,6 +6,7 @@ type GridPreviewProps = {
   path?: GridPoint[] | null;
   colors: PreviewColors;
   openings?: GridPoint[];
+  showOpeningHandles?: boolean;
   openingsDraggable?: boolean;
   onMoveOpening?: (openingIndex: number, target: GridPoint) => void;
   previewWidth?: number;
@@ -35,6 +36,7 @@ export function GridPreview({
   path,
   colors,
   openings = [],
+  showOpeningHandles = true,
   openingsDraggable = false,
   onMoveOpening,
   previewWidth,
@@ -300,7 +302,7 @@ export function GridPreview({
         }}
       >
         <canvas ref={canvasRef} className="grid-preview-canvas" />
-        {openingsDraggable
+        {openingsDraggable && showOpeningHandles
           ? openings.slice(0, 2).map((opening, index) => {
               const markerStyle = {
                 left: `${((opening.column + 0.5) / columns) * 100}%`,

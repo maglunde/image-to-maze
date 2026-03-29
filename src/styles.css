@@ -224,6 +224,62 @@ button:disabled {
   gap: 10px;
 }
 
+.toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbe7f5;
+  font-weight: 600;
+}
+
+.toggle-button.is-active {
+  background: rgba(35, 197, 94, 0.16);
+  color: #f8fafc;
+}
+
+.toggle-pill {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+  transition: background 160ms ease;
+}
+
+.toggle-button.is-active .toggle-pill {
+  background: rgba(34, 197, 94, 0.7);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #f8fafc;
+  transition: transform 160ms ease;
+}
+
+.toggle-button.is-active .toggle-thumb {
+  transform: translateX(18px);
+}
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.export-button {
+  width: 100%;
+}
+
 .swatch-field {
   justify-items: center;
   text-align: center;
@@ -647,7 +703,8 @@ strong {
   }
 
   .tab-row,
-  .swatch-grid {
+  .swatch-grid,
+  .export-grid {
     grid-template-columns: 1fr;
   }
 

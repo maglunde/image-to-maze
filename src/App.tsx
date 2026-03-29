@@ -2,6 +2,13 @@ import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { GridPreview } from "./components/GridPreview";
 import { ImageDropzone } from "./components/ImageDropzone";
 import type { AnalysisOptions, Grid, GridPoint, PreviewColors } from "./types";
+import {
+  exportPdf,
+  exportPng,
+  exportSvg,
+  getDefaultExportBaseName,
+  hasVisiblePathPoint,
+} from "./utils/export";
 import { analyzeMazeImage, estimateAnalysisOptions } from "./utils/imageProcessing";
 import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
 import {
@@ -26,6 +33,52 @@ const defaultPreviewColors: PreviewColors = {
   walkable: "#ecfeff",
 };
 
+function pointsEqual(left: GridPoint, right: GridPoint): boolean {
+  return left.row === right.row && left.column === right.column;
+}
+
+function scaleBoundaryIndex(value: number, previousMax: number, nextMax: number): number {
+  if (previousMax <= 0 || nextMax <= 0) {
+    return 0;
+  }
+
+  return Math.round((value / previousMax) * nextMax);
+}
+
+function remapBoundaryOpening(
+  opening: GridPoint,
+  previousRows: number,
+  previousColumns: number,
+  nextRows: number,
+  nextColumns: number,
+): GridPoint {
+  if (opening.row === 0) {
+    return {
+      row: 0,
+      column: scaleBoundaryIndex(opening.column, previousColumns - 1, nextColumns - 1),
+    };
+  }
+
+  if (opening.row === previousRows - 1) {
+    return {
+      row: nextRows - 1,
+      column: scaleBoundaryIndex(opening.column, previousColumns - 1, nextColumns - 1),
+    };
+  }
+
+  if (opening.column === 0) {
+    return {
+      row: scaleBoundaryIndex(opening.row, previousRows - 1, nextRows - 1),
+      column: 0,
+    };
+  }
+
+  return {
+    row: scaleBoundaryIndex(opening.row, previousRows - 1, nextRows - 1),
+    column: nextColumns - 1,
+  };
+}
+
 export default function App() {
   const [inputTab, setInputTab] = useState<"generate" | "upload">("generate");
   const [sourceMode, setSourceMode] = useState<"none" | "image" | "generated">("none");
@@ -44,6 +97,7 @@ export default function App() {
   const [showSourcePanels, setShowSourcePanels] = useState(false);
   const [showPath, setShowPath] = useState(true);
   const [previewColors, setPreviewColors] = useState<PreviewColors>(defaultPreviewColors);
+  const [isExporting, setIsExporting] = useState(false);
   const [mazeWidth, setMazeWidth] = useState(31);
   const [mazeHeight, setMazeHeight] = useState(31);
 
@@ -235,8 +289,22 @@ export default function App() {
 
   const handleGenerateMaze = () => {
     const rawMaze = generateMaze(mazeWidth, mazeHeight);
-    const openings = getBoundaryOpenings(rawMaze).slice(0, 2);
+    const fallbackOpenings = getBoundaryOpenings(rawMaze).slice(0, 2);
     const baseGrid = sealMazeBoundary(rawMaze);
+    const previousRows = generatedBaseGrid.length;
+    const previousColumns = generatedBaseGrid[0]?.length ?? 0;
+    const nextRows = baseGrid.length;
+    const nextColumns = baseGrid[0]?.length ?? 0;
+    const nextOpenings =
+      generatedOpenings.length >= 2 && previousRows > 0 && previousColumns > 0
+        ? generatedOpenings.slice(0, 2).map((opening) =>
+            remapBoundaryOpening(opening, previousRows, previousColumns, nextRows, nextColumns),
+          )
+        : fallbackOpenings;
+    const openings =
+      nextOpenings.length >= 2 && !pointsEqual(nextOpenings[0], nextOpenings[1])
+        ? nextOpenings
+        : fallbackOpenings;
     const nextMaze = applyBoundaryOpenings(baseGrid, openings);
 
     setError("");
@@ -258,6 +326,36 @@ export default function App() {
 
       return "";
     });
+  };
+
+  const handleExport = async (format: "svg" | "png" | "pdf") => {
+    if (grid.length === 0) {
+      return;
+    }
+
+    const baseName = getDefaultExportBaseName(sourceMode);
+    const exportPath = hasVisiblePathPoint(path, showPath);
+
+    setError("");
+    setIsExporting(true);
+
+    try {
+      if (format === "svg") {
+        exportSvg(grid, exportPath, previewColors, `${baseName}.svg`);
+        return;
+      }
+
+      if (format === "png") {
+        await exportPng(grid, exportPath, previewColors, `${baseName}.png`);
+        return;
+      }
+
+      await exportPdf(grid, exportPath, previewColors, `${baseName}.pdf`);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Kunne ikke eksportere maze.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleMoveOpening = (openingIndex: number, target: GridPoint) => {
@@ -482,12 +580,13 @@ export default function App() {
               grid={grid}
               path={showPath ? path : null}
               colors={previewColors}
-              openings={showPath ? openings : []}
-              openingsDraggable={showPath && sourceMode === "generated"}
+              openings={openings}
+              showOpeningHandles={showPath}
+              openingsDraggable={sourceMode === "generated"}
               onMoveOpening={handleMoveOpening}
               previewWidth={previewSize?.width}
               previewHeight={previewSize?.height}
-              />
+            />
 
               {isPreviewBusy ? (
                 <div className="preview-processing-overlay">
@@ -537,14 +636,17 @@ export default function App() {
               <h2>Visning</h2>
             </div>
 
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={showPath}
-                onChange={(event) => setShowPath(event.target.checked)}
-              />
+            <button
+              type="button"
+              className={`toggle-button ${showPath ? "is-active" : ""}`}
+              aria-pressed={showPath}
+              onClick={() => setShowPath((current) => !current)}
+            >
               <span>Show path</span>
-            </label>
+              <span className="toggle-pill" aria-hidden="true">
+                <span className="toggle-thumb" />
+              </span>
+            </button>
 
             <div className="swatch-grid">
               <label className="swatch-field">
@@ -592,6 +694,43 @@ export default function App() {
                 <span>Åpen vei</span>
               </label>
             </div>
+          </section>
+
+          <section className="panel controls-panel">
+            <div className="section-head">
+              <h2>Eksport</h2>
+            </div>
+
+            <div className="export-grid">
+              <button
+                type="button"
+                className="ghost-button export-button"
+                onClick={() => void handleExport("svg")}
+                disabled={grid.length === 0 || isExporting}
+              >
+                SVG
+              </button>
+              <button
+                type="button"
+                className="ghost-button export-button"
+                onClick={() => void handleExport("png")}
+                disabled={grid.length === 0 || isExporting}
+              >
+                PNG
+              </button>
+              <button
+                type="button"
+                className="ghost-button export-button"
+                onClick={() => void handleExport("pdf")}
+                disabled={grid.length === 0 || isExporting}
+              >
+                PDF
+              </button>
+            </div>
+
+            <p className="panel-note">
+              Eksporterer dagens visning med valgte farger{showPath && path ? " og path" : ""}.
+            </p>
           </section>
 
           <section className="results-stack">

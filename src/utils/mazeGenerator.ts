@@ -158,15 +158,160 @@ export function getBoundaryOpenings(grid: Grid): GridPoint[] {
   return openings;
 }
 
+function getInteriorEntryPoint(grid: Grid, opening: GridPoint): GridPoint | null {
+  const rows = grid.length;
+  const columns = grid[0]?.length ?? 0;
+
+  if (rows < 3 || columns < 3) {
+    return null;
+  }
+
+  if (opening.row === 0) {
+    return { row: 1, column: opening.column };
+  }
+
+  if (opening.row === rows - 1) {
+    return { row: rows - 2, column: opening.column };
+  }
+
+  if (opening.column === 0) {
+    return { row: opening.row, column: 1 };
+  }
+
+  if (opening.column === columns - 1) {
+    return { row: opening.row, column: columns - 2 };
+  }
+
+  return null;
+}
+
+function isCornerOpening(point: GridPoint, rows: number, columns: number): boolean {
+  const isTopOrBottom = point.row === 0 || point.row === rows - 1;
+  const isLeftOrRight = point.column === 0 || point.column === columns - 1;
+  return isTopOrBottom && isLeftOrRight;
+}
+
+function pointKey(point: GridPoint): string {
+  return `${point.row}:${point.column}`;
+}
+
+function reconstructPath(
+  predecessors: Map<string, string>,
+  start: GridPoint,
+  end: GridPoint,
+): GridPoint[] {
+  const path: GridPoint[] = [];
+  let currentKey = pointKey(end);
+  const startKey = pointKey(start);
+
+  while (true) {
+    const [row, column] = currentKey.split(":").map(Number);
+    path.push({ row, column });
+
+    if (currentKey === startKey) {
+      break;
+    }
+
+    const previousKey = predecessors.get(currentKey);
+
+    if (!previousKey) {
+      return [];
+    }
+
+    currentKey = previousKey;
+  }
+
+  path.reverse();
+  return path;
+}
+
+function carveOpeningConnection(grid: Grid, opening: GridPoint): void {
+  const entry = getInteriorEntryPoint(grid, opening);
+
+  if (!entry) {
+    return;
+  }
+
+  grid[opening.row][opening.column] = 0;
+
+  if (grid[entry.row][entry.column] === 0) {
+    return;
+  }
+
+  const rows = grid.length;
+  const columns = grid[0].length;
+  const queue: GridPoint[] = [entry];
+  const visited = new Set<string>([pointKey(entry)]);
+  const predecessors = new Map<string, string>();
+  let target: GridPoint | null = null;
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+
+    if (
+      (current.row !== entry.row || current.column !== entry.column) &&
+      grid[current.row][current.column] === 0
+    ) {
+      target = current;
+      break;
+    }
+
+    const neighbors = [
+      { row: current.row - 1, column: current.column },
+      { row: current.row + 1, column: current.column },
+      { row: current.row, column: current.column - 1 },
+      { row: current.row, column: current.column + 1 },
+    ];
+
+    for (const neighbor of neighbors) {
+      if (
+        neighbor.row <= 0 ||
+        neighbor.row >= rows - 1 ||
+        neighbor.column <= 0 ||
+        neighbor.column >= columns - 1
+      ) {
+        continue;
+      }
+
+      const key = pointKey(neighbor);
+
+      if (visited.has(key)) {
+        continue;
+      }
+
+      visited.add(key);
+      predecessors.set(key, pointKey(current));
+      queue.push(neighbor);
+    }
+  }
+
+  if (!target) {
+    grid[entry.row][entry.column] = 0;
+    return;
+  }
+
+  const connectionPath = reconstructPath(predecessors, entry, target);
+
+  for (const point of connectionPath) {
+    grid[point.row][point.column] = 0;
+  }
+}
+
 export function applyBoundaryOpenings(grid: Grid, openings: GridPoint[]): Grid {
   if (grid.length === 0 || grid[0].length === 0 || openings.length < 2) {
     return grid;
   }
 
   const nextGrid = sealMazeBoundary(grid);
+  const rows = nextGrid.length;
+  const columns = nextGrid[0].length;
 
   for (const opening of openings.slice(0, 2)) {
-    nextGrid[opening.row][opening.column] = 0;
+    if (isCornerOpening(opening, rows, columns)) {
+      continue;
+    }
+
+    carveOpeningConnection(nextGrid, opening);
   }
 
   return nextGrid;
@@ -179,7 +324,7 @@ export function moveBoundaryOpening(
   target: GridPoint,
 ): { grid: Grid; openings: GridPoint[] } {
   if (openings.length < 2 || openingIndex < 0 || openingIndex >= openings.length) {
-    return { grid: baseGrid, openings };
+    return { grid: applyBoundaryOpenings(baseGrid, openings), openings };
   }
 
   const rows = baseGrid.length;
@@ -194,8 +339,8 @@ export function moveBoundaryOpening(
     clampedTarget.column === 0 ||
     clampedTarget.column === columns - 1;
 
-  if (!isBoundaryTarget) {
-    return { grid: baseGrid, openings };
+  if (!isBoundaryTarget || isCornerOpening(clampedTarget, rows, columns)) {
+    return { grid: applyBoundaryOpenings(baseGrid, openings), openings };
   }
 
   const nextOpenings = openings.map((opening, index) =>
