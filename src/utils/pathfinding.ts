@@ -237,6 +237,18 @@ function findMazeFrame(grid: Grid, wallValue: 0 | 1, walkableValue: 0 | 1): Maze
   return bestFrame;
 }
 
+function isPlausibleFrame(grid: Grid, frame: MazeFrame): boolean {
+  const gridHeight = grid.length;
+  const gridWidth = grid[0]?.length ?? 0;
+  const frameHeight = frame.bottom - frame.top + 1;
+  const frameWidth = frame.right - frame.left + 1;
+  const areaRatio = (frameWidth * frameHeight) / Math.max(1, gridWidth * gridHeight);
+  const widthRatio = frameWidth / Math.max(1, gridWidth);
+  const heightRatio = frameHeight / Math.max(1, gridHeight);
+
+  return areaRatio >= 0.35 && widthRatio >= 0.55 && heightRatio >= 0.55;
+}
+
 function reconstructPath(
   predecessors: Map<string, string>,
   start: GridPoint,
@@ -314,7 +326,7 @@ function solveWithPolarity(
 ): GridPoint[] | null {
   const frame = findMazeFrame(grid, wallValue, walkableValue);
 
-  if (!frame) {
+  if (!frame || !isPlausibleFrame(grid, frame)) {
     return null;
   }
 
@@ -322,11 +334,5 @@ function solveWithPolarity(
 }
 
 export function findMazePath(grid: Grid): GridPoint[] | null {
-  const normalPath = solveWithPolarity(grid, 1, 0);
-
-  if (normalPath) {
-    return normalPath;
-  }
-
-  return solveWithPolarity(grid, 0, 1);
+  return solveWithPolarity(grid, 1, 0);
 }

@@ -1,4 +1,11 @@
 import type { AnalysisOptions, AnalysisResult, Grid } from "../types";
+import { findMazePath } from "./pathfinding";
+
+export const TILE_SIZE_MIN = 1;
+export const TILE_SIZE_MAX = 32;
+const THRESHOLD_MIN = 0;
+const THRESHOLD_MAX = 255;
+const AUTO_TUNE_START_THRESHOLD = 128;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -209,6 +216,38 @@ function buildGrid(binaryPixels: Uint8Array, width: number, height: number, tile
   return grid;
 }
 
+function countBoundaryOpenings(grid: Grid): number {
+  if (grid.length === 0 || grid[0].length === 0) {
+    return 0;
+  }
+
+  const rows = grid.length;
+  const columns = grid[0].length;
+  let openings = 0;
+
+  for (let column = 0; column < columns; column += 1) {
+    if (grid[0][column] === 0) {
+      openings += 1;
+    }
+
+    if (grid[rows - 1][column] === 0) {
+      openings += 1;
+    }
+  }
+
+  for (let row = 1; row < rows - 1; row += 1) {
+    if (grid[row][0] === 0) {
+      openings += 1;
+    }
+
+    if (grid[row][columns - 1] === 0) {
+      openings += 1;
+    }
+  }
+
+  return openings;
+}
+
 function rowsEqual(left: number[], right: number[]): boolean {
   if (left.length !== right.length) {
     return false;
@@ -236,6 +275,79 @@ function normalizeGridThickness(grid: Grid): Grid {
   return collapsedRows.map((_, rowIndex) => collapsedColumns.map((column) => column[rowIndex]));
 }
 
+function finalizeGrid(grid: Grid, options: AnalysisOptions): Grid {
+  return options.normalizePathWidth ? normalizeGridThickness(grid) : grid;
+}
+
+function buildGridFromBinaryPixels(
+  binaryPixels: Uint8Array,
+  width: number,
+  height: number,
+  options: AnalysisOptions,
+): Grid {
+  return finalizeGrid(buildGrid(binaryPixels, width, height, options.tileSize), options);
+}
+
+function buildProcessedDataUrl(imageData: ImageData, width: number, height: number): string {
+  const processedCanvas = createCanvas(width, height);
+  const processedContext = processedCanvas.getContext("2d");
+
+  if (!processedContext) {
+    throw new Error("Canvas 2D context is not available.");
+  }
+
+  processedContext.putImageData(imageData, 0, 0);
+  return processedCanvas.toDataURL("image/png");
+}
+
+function getFibonacciTileSizes(maxTileSize: number): number[] {
+  const sizes = new Set<number>();
+  let previous = 1;
+  let current = 1;
+
+  while (previous <= maxTileSize) {
+    sizes.add(previous);
+    [previous, current] = [current, previous + current];
+  }
+
+  return [...sizes].filter((value) => value >= TILE_SIZE_MIN && value <= maxTileSize).sort((a, b) => a - b);
+}
+
+function scoreGridCandidate(
+  grid: Grid,
+  path: ReturnType<typeof findMazePath>,
+): number {
+  const rows = grid.length;
+  const columns = grid[0]?.length ?? 0;
+
+  if (rows === 0 || columns === 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const cellCount = rows * columns;
+  const wallCount = grid.reduce(
+    (sum, row) => sum + row.reduce((rowSum, cell) => rowSum + cell, 0),
+    0,
+  );
+  const wallRatio = wallCount / cellCount;
+  const boundaryOpenings = countBoundaryOpenings(grid);
+  let score = 0;
+
+  if (path) {
+    score += 100000;
+    score += path.length * 20;
+  }
+
+  score -= Math.abs(boundaryOpenings - 2) * 3000;
+  score -= Math.abs(wallRatio - 0.42) * 2000;
+
+  if (Math.min(rows, columns) < 8) {
+    score -= 4000;
+  }
+
+  return score;
+}
+
 export async function analyzeMazeImage(
   imageUrl: string,
   options: AnalysisOptions,
@@ -260,22 +372,13 @@ export async function analyzeMazeImage(
     options.invert,
   );
 
-  const processedCanvas = createCanvas(width, height);
-  const processedContext = processedCanvas.getContext("2d");
-
-  if (!processedContext) {
-    throw new Error("Canvas 2D context is not available.");
-  }
-
-  processedContext.putImageData(imageData, 0, 0);
-
-  const grid = buildGrid(binaryPixels, width, height, options.tileSize);
+  const grid = buildGridFromBinaryPixels(binaryPixels, width, height, options);
 
   return {
     width,
     height,
-    processedDataUrl: processedCanvas.toDataURL("image/png"),
-    grid: options.normalizePathWidth ? normalizeGridThickness(grid) : grid,
+    processedDataUrl: buildProcessedDataUrl(imageData, width, height),
+    grid,
   };
 }
 
@@ -306,21 +409,86 @@ export async function estimateAnalysisOptions(
     }
   }
 
-  const lightCount = luminancePixels.length - darkCount;
-  const invert = darkCount > lightCount;
   const binaryPixels = new Uint8Array(width * height);
 
   for (let index = 0; index < luminancePixels.length; index += 1) {
-    binaryPixels[index] = getBinaryValue(luminancePixels[index], threshold, invert);
+    binaryPixels[index] = getBinaryValue(luminancePixels[index], threshold, currentOptions.invert);
   }
 
   const runLengths = collectRunLengths(binaryPixels, width, height);
-  const tileSize = clamp(Math.round(percentile(runLengths, 0.3)), 2, 16);
+  const tileSize = clamp(Math.round(percentile(runLengths, 0.3)), TILE_SIZE_MIN, TILE_SIZE_MAX);
 
   return {
     ...currentOptions,
     threshold,
-    invert,
     tileSize,
   };
+}
+
+export async function autoTuneAnalysisOptions(
+  imageUrl: string,
+  currentOptions: AnalysisOptions,
+): Promise<AnalysisOptions | null> {
+  const image = await loadImage(imageUrl);
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  const sourceCanvas = createCanvas(width, height);
+  const sourceContext = sourceCanvas.getContext("2d");
+
+  if (!sourceContext) {
+    throw new Error("Canvas 2D context is not available.");
+  }
+
+  sourceContext.drawImage(image, 0, 0, width, height);
+  const sourceImageData = sourceContext.getImageData(0, 0, width, height);
+  const tileSizeCandidates = getFibonacciTileSizes(TILE_SIZE_MAX);
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestOptions: AnalysisOptions = {
+    ...currentOptions,
+    threshold: AUTO_TUNE_START_THRESHOLD,
+    tileSize: tileSizeCandidates[0] ?? TILE_SIZE_MIN,
+  };
+  let bestHasPath = false;
+  let bestBoundaryOpenings = 0;
+  let attemptsUsed = 0;
+  let threshold = AUTO_TUNE_START_THRESHOLD;
+
+  while (threshold >= THRESHOLD_MIN + 1) {
+    const { binaryPixels } = buildProcessedImageData(
+      sourceImageData,
+      width,
+      height,
+      threshold,
+      currentOptions.invert,
+    );
+    for (const tileSize of tileSizeCandidates) {
+      attemptsUsed += 1;
+
+      const candidateOptions: AnalysisOptions = {
+        ...currentOptions,
+        threshold,
+        tileSize,
+      };
+      const candidateGrid = buildGridFromBinaryPixels(binaryPixels, width, height, candidateOptions);
+      const path = findMazePath(candidateGrid);
+      const boundaryOpenings = countBoundaryOpenings(candidateGrid);
+      const score = scoreGridCandidate(candidateGrid, path);
+      const pathFound = path !== null;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestOptions = candidateOptions;
+        bestHasPath = pathFound;
+        bestBoundaryOpenings = boundaryOpenings;
+      }
+
+      if (pathFound) {
+        return candidateOptions;
+      }
+    }
+
+    threshold = Math.floor(threshold / 2);
+  }
+
+  return null;
 }

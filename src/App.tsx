@@ -9,7 +9,7 @@ import {
   getDefaultExportBaseName,
   hasVisiblePathPoint,
 } from "./utils/export";
-import { analyzeMazeImage, estimateAnalysisOptions } from "./utils/imageProcessing";
+import { TILE_SIZE_MAX, TILE_SIZE_MIN, analyzeMazeImage, autoTuneAnalysisOptions } from "./utils/imageProcessing";
 import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
 import {
   applyBoundaryOpenings,
@@ -214,6 +214,29 @@ export default function App() {
     };
   }, [imageUrl]);
 
+  const runAutoTune = (targetImageUrl: string, baseOptions: AnalysisOptions = options) => {
+    setIsAutoTuning(true);
+    setError("");
+
+    return autoTuneAnalysisOptions(targetImageUrl, baseOptions)
+      .then((nextOptions) => {
+        if (!nextOptions) {
+          setError("Fant ingen gyldig maze med auto-innstillingene.");
+          setOptions(baseOptions);
+          return;
+        }
+
+        setOptions(nextOptions);
+      })
+      .catch(() => {
+        setOptions(baseOptions);
+        setError("Auto-innstilling feilet.");
+      })
+      .finally(() => {
+        setIsAutoTuning(false);
+      });
+  };
+
   const handleFileSelect = (file: File) => {
     const nextUrl = URL.createObjectURL(file);
 
@@ -233,16 +256,11 @@ export default function App() {
       return nextUrl;
     });
 
-    void estimateAnalysisOptions(nextUrl, defaultOptions)
-      .then((nextOptions) => {
-        setOptions(nextOptions);
-      })
-      .catch(() => {
-        setOptions(defaultOptions);
-      })
-      .finally(() => {
-        setIsAutoTuning(false);
-      });
+    void runAutoTune(nextUrl, {
+      ...defaultOptions,
+      invert: options.invert,
+      normalizePathWidth: options.normalizePathWidth,
+    });
   };
 
   const copyToClipboard = async (value: string, errorMessage: string) => {
@@ -261,6 +279,7 @@ export default function App() {
     setError("");
     setGrid([]);
     setSourceMode("image");
+    void runAutoTune(processedUrl);
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -278,6 +297,7 @@ export default function App() {
     setError("");
     setGrid([]);
     setSourceMode("image");
+    void runAutoTune(gridPreviewUrl);
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -469,13 +489,22 @@ export default function App() {
                       <p className="sidebar-label">Analyseinnstillinger</p>
                       <label>
                         <div className="field-head">
-                          <span>Tile size</span>
+                          <span className="field-label">
+                            <span>Tile size</span>
+                            <span
+                              className="info-tooltip"
+                              data-tooltip="Hvor store bildepiksler som slås sammen til én grid-celle. Lavere verdi gir mer detalj, høyere verdi gir grovere grid."
+                              aria-label="Info om tile size"
+                            >
+                              i
+                            </span>
+                          </span>
                           <strong>{options.tileSize}px</strong>
                         </div>
                         <input
                           type="range"
-                          min="2"
-                          max="16"
+                          min={TILE_SIZE_MIN}
+                          max={TILE_SIZE_MAX}
                           value={options.tileSize}
                           onChange={(event) =>
                             setOptions((current) => ({
@@ -488,7 +517,16 @@ export default function App() {
 
                       <label>
                         <div className="field-head">
-                          <span>Threshold</span>
+                          <span className="field-label">
+                            <span>Threshold</span>
+                            <span
+                              className="info-tooltip"
+                              data-tooltip="Lysstyrkegrensen som avgjør hva som tolkes som vegg eller åpen vei. Lavere verdi gir færre vegger, høyere verdi gir flere."
+                              aria-label="Info om threshold"
+                            >
+                              i
+                            </span>
+                          </span>
                           <strong>{options.threshold}</strong>
                         </div>
                         <input
@@ -532,6 +570,15 @@ export default function App() {
                         />
                         <span>1-celle paths</span>
                       </label>
+
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => imageUrl && void runAutoTune(imageUrl)}
+                        disabled={!imageUrl || isAutoTuning || isProcessing}
+                      >
+                        {isAutoTuning ? "Finner beste innstillinger..." : "Finn beste innstillinger"}
+                      </button>
                     </div>
                   </>
                 ) : (
