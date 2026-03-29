@@ -9,8 +9,10 @@ type GridPreviewProps = {
   showOpeningHandles?: boolean;
   openingsDraggable?: boolean;
   onMoveOpening?: (openingIndex: number, target: GridPoint) => void;
+  onPreviewClick?: () => void;
   previewWidth?: number;
   previewHeight?: number;
+  className?: string;
 };
 
 function hexToRgb(color: string): { red: number; green: number; blue: number } {
@@ -39,8 +41,10 @@ export function GridPreview({
   showOpeningHandles = true,
   openingsDraggable = false,
   onMoveOpening,
+  onPreviewClick,
   previewWidth,
   previewHeight,
+  className,
 }: GridPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -176,6 +180,28 @@ export function GridPreview({
     "--preview-ratio": String(aspectWidth / aspectHeight),
   } as CSSProperties;
 
+  const isBoundaryBandTarget = (clientX: number, clientY: number): boolean => {
+    const frame = frameRef.current;
+
+    if (!frame) {
+      return false;
+    }
+
+    const rect = frame.getBoundingClientRect();
+    const x = clamp(clientX - rect.left, 0, rect.width);
+    const y = clamp(clientY - rect.top, 0, rect.height);
+    const cellWidth = rect.width / Math.max(columns, 1);
+    const cellHeight = rect.height / Math.max(rows, 1);
+    const edgeBand = Math.max(12, Math.min(24, Math.max(cellWidth, cellHeight) * 1.25));
+
+    return (
+      x <= edgeBand ||
+      x >= rect.width - edgeBand ||
+      y <= edgeBand ||
+      y >= rect.height - edgeBand
+    );
+  };
+
   const getBoundaryTarget = (clientX: number, clientY: number): GridPoint | null => {
     const frame = frameRef.current;
 
@@ -272,7 +298,10 @@ export function GridPreview({
   }
 
   return (
-    <div className="grid-preview-shell" style={{ background: colors.walkable }}>
+    <div
+      className={className ? `grid-preview-shell ${className}` : "grid-preview-shell"}
+      style={{ background: colors.walkable }}
+    >
       <div
         ref={frameRef}
         className="grid-preview-frame"
@@ -288,6 +317,10 @@ export function GridPreview({
             return;
           }
 
+          if (!isBoundaryBandTarget(event.clientX, event.clientY)) {
+            return;
+          }
+
           const target = getBoundaryTarget(event.clientX, event.clientY);
 
           if (!target) {
@@ -299,6 +332,23 @@ export function GridPreview({
           if (nearestOpeningIndex !== null) {
             onMoveOpening(nearestOpeningIndex, target);
           }
+        }}
+        onClick={(event) => {
+          if (!onPreviewClick || activeOpeningIndex !== null) {
+            return;
+          }
+
+          const targetElement = event.target as HTMLElement;
+
+          if (targetElement.closest(".opening-handle")) {
+            return;
+          }
+
+          if (openingsDraggable && isBoundaryBandTarget(event.clientX, event.clientY)) {
+            return;
+          }
+
+          onPreviewClick();
         }}
       >
         <canvas ref={canvasRef} className="grid-preview-canvas" />
