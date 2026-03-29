@@ -2,13 +2,13 @@ import type { Grid } from "../types";
 import type { GridPoint } from "../types";
 
 function normalizeDimension(value: number): number {
-  const safe = Math.min(200, Math.max(5, Math.floor(value)));
+  const safe = Math.min(500, Math.max(5, Math.floor(value)));
 
   if (safe % 2 !== 0) {
     return safe;
   }
 
-  return safe === 200 ? 199 : safe + 1;
+  return safe === 500 ? 499 : safe + 1;
 }
 
 function randomOddWithin(limit: number): number {

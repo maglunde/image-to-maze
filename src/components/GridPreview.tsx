@@ -133,27 +133,44 @@ export function GridPreview({
 }: GridPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const lastFrameTimeRef = useRef<number | null>(null);
+  const snakeSpeedRef = useRef(snakeSpeed);
   const [activeOpeningIndex, setActiveOpeningIndex] = useState<number | null>(null);
-  const [animationTime, setAnimationTime] = useState(0);
+  const [animationProgress, setAnimationProgress] = useState(0);
   const hasGrid = grid.length > 0 && (grid[0]?.length ?? 0) > 0;
   const columns = hasGrid ? grid[0].length : 1;
   const rows = hasGrid ? grid.length : 1;
 
   useEffect(() => {
+    snakeSpeedRef.current = snakeSpeed;
+  }, [snakeSpeed]);
+
+  useEffect(() => {
     if (pathRenderMode !== "snake" || !path || path.length < 2) {
+      lastFrameTimeRef.current = null;
+      setAnimationProgress(0);
       return;
     }
 
     let frameId = 0;
+    lastFrameTimeRef.current = null;
+    setAnimationProgress(0);
 
     const animate = (nextTime: number) => {
-      setAnimationTime(nextTime);
+      if (lastFrameTimeRef.current === null) {
+        lastFrameTimeRef.current = nextTime;
+      }
+
+      const deltaSeconds = (nextTime - lastFrameTimeRef.current) / 1000;
+      lastFrameTimeRef.current = nextTime;
+      setAnimationProgress((current) => current + deltaSeconds * snakeSpeedRef.current);
       frameId = window.requestAnimationFrame(animate);
     };
 
     frameId = window.requestAnimationFrame(animate);
 
     return () => {
+      lastFrameTimeRef.current = null;
       window.cancelAnimationFrame(frameId);
     };
   }, [path, pathRenderMode]);
@@ -249,7 +266,7 @@ export function GridPreview({
       if (pathRenderMode === "snake" && sampleScale === 1) {
         const pauseLength = Math.max(10, Math.min(path.length * 0.2, 24));
         const cycleLength = path.length + pauseLength;
-        const revealProgress = Math.min(path.length - 1, ((animationTime / 1000) * snakeSpeed) % cycleLength);
+        const revealProgress = Math.min(path.length - 1, animationProgress % cycleLength);
 
         if (revealProgress > 0) {
           drawCrispPathSegment(context, path, 0, revealProgress, renderCellSize, lineThickness);
@@ -276,7 +293,7 @@ export function GridPreview({
         context.stroke();
       }
     }
-  }, [animationTime, colors.path, colors.walkable, colors.wall, grid, hasGrid, path, pathRenderMode, snakeSpeed]);
+  }, [animationProgress, colors.path, colors.walkable, colors.wall, grid, hasGrid, path, pathRenderMode]);
 
   const aspectWidth = previewWidth ?? columns;
   const aspectHeight = previewHeight ?? rows;

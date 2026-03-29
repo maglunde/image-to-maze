@@ -482,7 +482,7 @@ export default function App() {
                     <input
                       type="range"
                       min="5"
-                      max="200"
+                      max="500"
                       step="1"
                       value={mazeWidth}
                       onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
@@ -497,7 +497,7 @@ export default function App() {
                     <input
                       type="range"
                       min="5"
-                      max="200"
+                      max="500"
                       step="1"
                       value={mazeHeight}
                       onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
