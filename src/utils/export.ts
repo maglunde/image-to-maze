@@ -1,4 +1,5 @@
-import type { Grid, GridPoint, PreviewColors } from "../types";
+import type { Grid, GridPoint, PathRenderMode, PreviewColors } from "../types";
+import { buildSvgPathData, traceCanvasPath } from "./pathRender";
 
 const EXPORT_CELL_SIZE = 12;
 const EXPORT_PADDING_CELLS = 1;
@@ -30,6 +31,7 @@ function buildSvgMarkup(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
+  pathRenderMode: PathRenderMode,
   cellSize = EXPORT_CELL_SIZE,
 ): string {
   const rows = grid.length;
@@ -53,13 +55,7 @@ function buildSvgMarkup(
   const overlays: string[] = [];
 
   if (path && path.length > 0) {
-    const pathData = path
-      .map((point, index) => {
-        const x = offset + point.column * cellSize + cellSize / 2;
-        const y = offset + point.row * cellSize + cellSize / 2;
-        return `${index === 0 ? "M" : "L"} ${x} ${y}`;
-      })
-      .join(" ");
+    const pathData = buildSvgPathData(path, cellSize, offset, pathRenderMode);
 
     overlays.push(
       `<path d="${pathData}" fill="none" stroke="${escapeXml(colors.path)}" stroke-width="${Math.max(
@@ -92,6 +88,7 @@ function createExportCanvas(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
+  pathRenderMode: PathRenderMode,
   cellSize = EXPORT_CELL_SIZE,
 ): HTMLCanvasElement {
   const rows = grid.length;
@@ -126,19 +123,7 @@ function createExportCanvas(
     context.lineWidth = Math.max(2, cellSize * 0.35);
     context.lineCap = "round";
     context.lineJoin = "round";
-    context.beginPath();
-
-    path.forEach((point, index) => {
-      const x = offset + point.column * cellSize + cellSize / 2;
-      const y = offset + point.row * cellSize + cellSize / 2;
-
-      if (index === 0) {
-        context.moveTo(x, y);
-      } else {
-        context.lineTo(x, y);
-      }
-    });
-
+    traceCanvasPath(context, path, cellSize, offset, pathRenderMode);
     context.stroke();
 
     const radius = Math.max(2, cellSize * 0.28);
@@ -272,9 +257,10 @@ export function exportSvg(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
+  pathRenderMode: PathRenderMode,
   filename = "maze-export.svg",
 ): void {
-  const svg = buildSvgMarkup(grid, path, colors);
+  const svg = buildSvgMarkup(grid, path, colors, pathRenderMode);
   triggerDownload(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), filename);
 }
 
@@ -282,9 +268,10 @@ export async function exportPng(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
+  pathRenderMode: PathRenderMode,
   filename = "maze-export.png",
 ): Promise<void> {
-  const canvas = createExportCanvas(grid, path, colors);
+  const canvas = createExportCanvas(grid, path, colors, pathRenderMode);
   const blob = await blobFromCanvas(canvas, "image/png");
   triggerDownload(blob, filename);
 }
@@ -293,9 +280,10 @@ export async function exportPdf(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
+  pathRenderMode: PathRenderMode,
   filename = "maze-export.pdf",
 ): Promise<void> {
-  const canvas = createExportCanvas(grid, path, colors, 10);
+  const canvas = createExportCanvas(grid, path, colors, pathRenderMode, 10);
   const blob = buildPdfBlob(canvas);
   triggerDownload(blob, filename);
 }

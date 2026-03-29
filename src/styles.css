@@ -353,6 +353,38 @@ button:disabled {
   transform: translateX(18px);
 }
 
+.display-mode-row {
+  display: grid;
+  gap: 8px;
+}
+
+.display-mode-label {
+  color: #b5c3d5;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.display-mode-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.display-mode-button {
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.66);
+  color: #a8b7cb;
+  box-shadow: none;
+}
+
+.display-mode-button.is-active {
+  background: rgba(125, 211, 252, 0.18);
+  color: #f8fafc;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+}
+
 .export-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

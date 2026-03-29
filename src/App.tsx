@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { GridPreview } from "./components/GridPreview";
 import { ImageDropzone } from "./components/ImageDropzone";
-import type { AnalysisOptions, Grid, GridPoint, PreviewColors } from "./types";
+import type { AnalysisOptions, Grid, GridPoint, PathRenderMode, PreviewColors } from "./types";
 import {
   exportPdf,
   exportPng,
@@ -96,6 +96,8 @@ export default function App() {
   const [isAutoTuning, setIsAutoTuning] = useState(false);
   const [showSourcePanels, setShowSourcePanels] = useState(false);
   const [showPath, setShowPath] = useState(true);
+  const [pathRenderMode, setPathRenderMode] = useState<PathRenderMode>("center");
+  const [snakeSpeed, setSnakeSpeed] = useState(100);
   const [previewColors, setPreviewColors] = useState<PreviewColors>(defaultPreviewColors);
   const [isExporting, setIsExporting] = useState(false);
   const [mazeWidth, setMazeWidth] = useState(31);
@@ -383,16 +385,16 @@ export default function App() {
 
     try {
       if (format === "svg") {
-        exportSvg(grid, exportPath, previewColors, `${baseName}.svg`);
+        exportSvg(grid, exportPath, previewColors, pathRenderMode, `${baseName}.svg`);
         return;
       }
 
       if (format === "png") {
-        await exportPng(grid, exportPath, previewColors, `${baseName}.png`);
+        await exportPng(grid, exportPath, previewColors, pathRenderMode, `${baseName}.png`);
         return;
       }
 
-      await exportPdf(grid, exportPath, previewColors, `${baseName}.pdf`);
+      await exportPdf(grid, exportPath, previewColors, pathRenderMode, `${baseName}.pdf`);
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "Kunne ikke eksportere maze.");
     } finally {
@@ -656,6 +658,8 @@ export default function App() {
               <GridPreview
                 grid={grid}
                 path={showPath ? path : null}
+                pathRenderMode={pathRenderMode}
+                snakeSpeed={snakeSpeed}
                 colors={previewColors}
                 openings={openings}
                 showOpeningHandles={showPath}
@@ -737,6 +741,8 @@ export default function App() {
               <GridPreview
                 grid={grid}
                 path={showPath ? path : null}
+                pathRenderMode={pathRenderMode}
+                snakeSpeed={snakeSpeed}
                 colors={previewColors}
                 openings={openings}
                 showOpeningHandles={false}
@@ -766,6 +772,43 @@ export default function App() {
                 <span className="toggle-thumb" />
               </span>
             </button>
+
+            <div className="display-mode-row" role="group" aria-label="Path-tegning">
+              <span className="display-mode-label">Path-tegning</span>
+              <div className="display-mode-group">
+                <button
+                  type="button"
+                  className={`display-mode-button ${pathRenderMode === "center" ? "is-active" : ""}`}
+                  onClick={() => setPathRenderMode("center")}
+                >
+                  Rett
+                </button>
+                <button
+                  type="button"
+                  className={`display-mode-button ${pathRenderMode === "snake" ? "is-active" : ""}`}
+                  onClick={() => setPathRenderMode("snake")}
+                >
+                  Slange
+                </button>
+              </div>
+            </div>
+
+            {pathRenderMode === "snake" ? (
+              <label>
+                <div className="field-head">
+                  <span>Slangefart</span>
+                  <strong>{snakeSpeed}</strong>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  value={snakeSpeed}
+                  onChange={(event) => setSnakeSpeed(Number(event.target.value))}
+                />
+              </label>
+            ) : null}
 
             <div className="swatch-grid">
               <label className="swatch-field">

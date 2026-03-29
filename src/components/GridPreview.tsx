@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Grid, GridPoint, PreviewColors } from "../types";
+import type { Grid, GridPoint, PathRenderMode, PreviewColors } from "../types";
 
 type GridPreviewProps = {
   grid: Grid;
   path?: GridPoint[] | null;
+  pathRenderMode?: PathRenderMode;
+  snakeSpeed?: number;
   colors: PreviewColors;
   openings?: GridPoint[];
   showOpeningHandles?: boolean;
@@ -33,9 +35,92 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function getInterpolatedPoint(path: GridPoint[], progress: number, cellSize: number): { x: number; y: number } {
+  const clampedProgress = clamp(progress, 0, path.length - 1);
+  const startIndex = Math.floor(clampedProgress);
+  const endIndex = Math.min(path.length - 1, Math.ceil(clampedProgress));
+  const mix = clampedProgress - startIndex;
+  const start = path[startIndex];
+  const end = path[endIndex];
+  const startX = start.column * cellSize + cellSize / 2;
+  const startY = start.row * cellSize + cellSize / 2;
+  const endX = end.column * cellSize + cellSize / 2;
+  const endY = end.row * cellSize + cellSize / 2;
+
+  return {
+    x: startX + (endX - startX) * mix,
+    y: startY + (endY - startY) * mix,
+  };
+}
+
+function drawCrispSegment(
+  context: CanvasRenderingContext2D,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  thickness: number,
+): void {
+  const roundedThickness = Math.max(2, Math.round(thickness));
+
+  if (from.x === to.x) {
+    const left = Math.round(from.x - roundedThickness / 2);
+    const top = Math.round(Math.min(from.y, to.y) - roundedThickness / 2);
+    const height = Math.max(roundedThickness, Math.round(Math.abs(to.y - from.y) + roundedThickness));
+    context.fillRect(left, top, roundedThickness, height);
+    return;
+  }
+
+  if (from.y === to.y) {
+    const left = Math.round(Math.min(from.x, to.x) - roundedThickness / 2);
+    const top = Math.round(from.y - roundedThickness / 2);
+    const width = Math.max(roundedThickness, Math.round(Math.abs(to.x - from.x) + roundedThickness));
+    context.fillRect(left, top, width, roundedThickness);
+    return;
+  }
+
+  context.fillRect(
+    Math.round(to.x - roundedThickness / 2),
+    Math.round(to.y - roundedThickness / 2),
+    roundedThickness,
+    roundedThickness,
+  );
+}
+
+function drawCrispPathSegment(
+  context: CanvasRenderingContext2D,
+  path: GridPoint[],
+  startProgress: number,
+  endProgress: number,
+  cellSize: number,
+  thickness: number,
+): void {
+  const safeStart = clamp(startProgress, 0, path.length - 1);
+  const safeEnd = clamp(endProgress, 0, path.length - 1);
+
+  if (safeEnd <= safeStart) {
+    return;
+  }
+
+  let previous = getInterpolatedPoint(path, safeStart, cellSize);
+
+  for (let index = Math.ceil(safeStart); index <= Math.floor(safeEnd); index += 1) {
+    const point = path[Math.min(index, path.length - 1)];
+    const current = {
+      x: point.column * cellSize + cellSize / 2,
+      y: point.row * cellSize + cellSize / 2,
+    };
+    drawCrispSegment(context, previous, current, thickness);
+    previous = current;
+  }
+
+  const endPoint = getInterpolatedPoint(path, safeEnd, cellSize);
+  drawCrispSegment(context, previous, endPoint, thickness);
+}
+
 export function GridPreview({
   grid,
   path,
+  pathRenderMode = "center",
+  snakeSpeed = 100,
   colors,
   openings = [],
   showOpeningHandles = true,
@@ -49,9 +134,29 @@ export function GridPreview({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [activeOpeningIndex, setActiveOpeningIndex] = useState<number | null>(null);
+  const [animationTime, setAnimationTime] = useState(0);
   const hasGrid = grid.length > 0 && (grid[0]?.length ?? 0) > 0;
   const columns = hasGrid ? grid[0].length : 1;
   const rows = hasGrid ? grid.length : 1;
+
+  useEffect(() => {
+    if (pathRenderMode !== "snake" || !path || path.length < 2) {
+      return;
+    }
+
+    let frameId = 0;
+
+    const animate = (nextTime: number) => {
+      setAnimationTime(nextTime);
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    frameId = window.requestAnimationFrame(animate);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [path, pathRenderMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -124,8 +229,7 @@ export function GridPreview({
     }
 
     if (path && path.length > 1) {
-      const lineThickness = 2;
-      const pointRadius = 2.5;
+      const lineThickness = Math.max(2, renderCellSize * 0.35);
       context.fillStyle = colors.path;
 
       const toPixelPoint = (row: number, column: number) => {
@@ -142,37 +246,37 @@ export function GridPreview({
         };
       };
 
-      for (let index = 1; index < path.length; index += 1) {
-        const previous = toPixelPoint(path[index - 1].row, path[index - 1].column);
-        const current = toPixelPoint(path[index].row, path[index].column);
+      if (pathRenderMode === "snake" && sampleScale === 1) {
+        const pauseLength = Math.max(10, Math.min(path.length * 0.2, 24));
+        const cycleLength = path.length + pauseLength;
+        const revealProgress = Math.min(path.length - 1, ((animationTime / 1000) * snakeSpeed) % cycleLength);
 
-        if (previous.y === current.y) {
-          const left = Math.min(previous.x, current.x);
-          const width = Math.max(lineThickness, Math.abs(current.x - previous.x));
-          context.fillRect(left, previous.y - lineThickness / 2, width, lineThickness);
-        } else if (previous.x === current.x) {
-          const top = Math.min(previous.y, current.y);
-          const height = Math.max(lineThickness, Math.abs(current.y - previous.y));
-          context.fillRect(previous.x - lineThickness / 2, top, lineThickness, height);
-        } else {
-          context.fillRect(current.x - lineThickness / 2, current.y - lineThickness / 2, lineThickness, lineThickness);
+        if (revealProgress > 0) {
+          drawCrispPathSegment(context, path, 0, revealProgress, renderCellSize, lineThickness);
         }
+      } else if (sampleScale === 1) {
+        drawCrispPathSegment(context, path, 0, path.length - 1, renderCellSize, lineThickness);
+      } else {
+        context.strokeStyle = colors.path;
+        context.lineWidth = Math.max(2, Math.round(lineThickness));
+        context.lineCap = "butt";
+        context.lineJoin = "miter";
+        context.beginPath();
+
+        path.forEach((point, index) => {
+          const current = toPixelPoint(point.row, point.column);
+
+          if (index === 0) {
+            context.moveTo(current.x, current.y);
+          } else {
+            context.lineTo(current.x, current.y);
+          }
+        });
+
+        context.stroke();
       }
-
-      const start = path[0];
-      const end = path[path.length - 1];
-      const startPoint = toPixelPoint(start.row, start.column);
-      const endPoint = toPixelPoint(end.row, end.column);
-
-      context.beginPath();
-      context.arc(startPoint.x, startPoint.y, pointRadius, 0, Math.PI * 2);
-      context.fill();
-
-      context.beginPath();
-      context.arc(endPoint.x, endPoint.y, pointRadius, 0, Math.PI * 2);
-      context.fill();
     }
-  }, [colors.path, colors.walkable, colors.wall, grid, path, hasGrid]);
+  }, [animationTime, colors.path, colors.walkable, colors.wall, grid, hasGrid, path, pathRenderMode, snakeSpeed]);
 
   const aspectWidth = previewWidth ?? columns;
   const aspectHeight = previewHeight ?? rows;

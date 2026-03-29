@@ -5,6 +5,8 @@ export type GridPoint = {
   column: number;
 };
 
+export type PathRenderMode = "center" | "snake";
+
 export type PreviewColors = {
   path: string;
   wall: string;
