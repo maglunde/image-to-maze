@@ -5,13 +5,12 @@ type GridPreviewProps = {
   grid: Grid;
   path?: GridPoint[] | null;
   pathRenderMode?: PathRenderMode;
-  snakeSpeed?: number;
+  animationProgress?: number;
   colors: PreviewColors;
   openings?: GridPoint[];
   showOpeningHandles?: boolean;
   openingsDraggable?: boolean;
   onMoveOpening?: (openingIndex: number, target: GridPoint) => void;
-  onPreviewClick?: () => void;
   previewWidth?: number;
   previewHeight?: number;
   className?: string;
@@ -120,60 +119,23 @@ export function GridPreview({
   grid,
   path,
   pathRenderMode = "center",
-  snakeSpeed = 100,
+  animationProgress = 0,
   colors,
   openings = [],
   showOpeningHandles = true,
   openingsDraggable = false,
   onMoveOpening,
-  onPreviewClick,
   previewWidth,
   previewHeight,
   className,
 }: GridPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
-  const lastFrameTimeRef = useRef<number | null>(null);
-  const snakeSpeedRef = useRef(snakeSpeed);
   const [activeOpeningIndex, setActiveOpeningIndex] = useState<number | null>(null);
-  const [animationProgress, setAnimationProgress] = useState(0);
+  const [isBoundaryHover, setIsBoundaryHover] = useState(false);
   const hasGrid = grid.length > 0 && (grid[0]?.length ?? 0) > 0;
   const columns = hasGrid ? grid[0].length : 1;
   const rows = hasGrid ? grid.length : 1;
-
-  useEffect(() => {
-    snakeSpeedRef.current = snakeSpeed;
-  }, [snakeSpeed]);
-
-  useEffect(() => {
-    if (pathRenderMode !== "snake" || !path || path.length < 2) {
-      lastFrameTimeRef.current = null;
-      setAnimationProgress(0);
-      return;
-    }
-
-    let frameId = 0;
-    lastFrameTimeRef.current = null;
-    setAnimationProgress(0);
-
-    const animate = (nextTime: number) => {
-      if (lastFrameTimeRef.current === null) {
-        lastFrameTimeRef.current = nextTime;
-      }
-
-      const deltaSeconds = (nextTime - lastFrameTimeRef.current) / 1000;
-      lastFrameTimeRef.current = nextTime;
-      setAnimationProgress((current) => current + deltaSeconds * snakeSpeedRef.current);
-      frameId = window.requestAnimationFrame(animate);
-    };
-
-    frameId = window.requestAnimationFrame(animate);
-
-    return () => {
-      lastFrameTimeRef.current = null;
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [path, pathRenderMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -425,8 +387,27 @@ export function GridPreview({
     >
       <div
         ref={frameRef}
-        className="grid-preview-frame"
+        className={`grid-preview-frame ${isBoundaryHover ? "is-boundary-hover" : ""}`}
         style={previewStyle}
+        onPointerMove={(event) => {
+          if (!openingsDraggable) {
+            if (isBoundaryHover) {
+              setIsBoundaryHover(false);
+            }
+            return;
+          }
+
+          const nextBoundaryHover = isBoundaryBandTarget(event.clientX, event.clientY);
+
+          if (nextBoundaryHover !== isBoundaryHover) {
+            setIsBoundaryHover(nextBoundaryHover);
+          }
+        }}
+        onPointerLeave={() => {
+          if (isBoundaryHover) {
+            setIsBoundaryHover(false);
+          }
+        }}
         onPointerDown={(event) => {
           if (!openingsDraggable || !onMoveOpening) {
             return;
@@ -453,23 +434,6 @@ export function GridPreview({
           if (nearestOpeningIndex !== null) {
             onMoveOpening(nearestOpeningIndex, target);
           }
-        }}
-        onClick={(event) => {
-          if (!onPreviewClick || activeOpeningIndex !== null) {
-            return;
-          }
-
-          const targetElement = event.target as HTMLElement;
-
-          if (targetElement.closest(".opening-handle")) {
-            return;
-          }
-
-          if (openingsDraggable && isBoundaryBandTarget(event.clientX, event.clientY)) {
-            return;
-          }
-
-          onPreviewClick();
         }}
       >
         <canvas ref={canvasRef} className="grid-preview-canvas" />

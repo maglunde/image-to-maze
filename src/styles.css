@@ -536,10 +536,6 @@ button:disabled {
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.grid-preview-shell.is-clickable .grid-preview-frame {
-  cursor: zoom-in;
-}
-
 .grid-preview-shell.is-expanded {
   --preview-shell-height: min(84vh, 960px);
   padding: 16px;
@@ -584,6 +580,10 @@ button:disabled {
   display: grid;
   place-items: center;
   position: relative;
+}
+
+.grid-preview-frame.is-boundary-hover {
+  cursor: pointer;
 }
 
 .grid-preview-canvas {

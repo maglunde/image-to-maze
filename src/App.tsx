@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { GridPreview } from "./components/GridPreview";
 import { ImageDropzone } from "./components/ImageDropzone";
 import type { AnalysisOptions, Grid, GridPoint, PathRenderMode, PreviewColors } from "./types";
@@ -17,6 +17,7 @@ import {
   getBoundaryOpenings,
   moveBoundaryOpening,
   sealMazeBoundary,
+  sortBoundaryOpenings,
 } from "./utils/mazeGenerator";
 import { findMazePath } from "./utils/pathfinding";
 
@@ -98,11 +99,14 @@ export default function App() {
   const [showPath, setShowPath] = useState(true);
   const [pathRenderMode, setPathRenderMode] = useState<PathRenderMode>("center");
   const [snakeSpeed, setSnakeSpeed] = useState(100);
+  const [snakeAnimationProgress, setSnakeAnimationProgress] = useState(0);
   const [previewColors, setPreviewColors] = useState<PreviewColors>(defaultPreviewColors);
   const [isExporting, setIsExporting] = useState(false);
   const [mazeWidth, setMazeWidth] = useState(31);
   const [mazeHeight, setMazeHeight] = useState(31);
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
+  const lastSnakeFrameTimeRef = useRef<number | null>(null);
+  const snakeSpeedRef = useRef(snakeSpeed);
 
   useEffect(() => {
     if (sourceMode !== "image") {
@@ -216,6 +220,40 @@ export default function App() {
       }
     };
   }, [imageUrl]);
+
+  useEffect(() => {
+    snakeSpeedRef.current = snakeSpeed;
+  }, [snakeSpeed]);
+
+  useEffect(() => {
+    if (pathRenderMode !== "snake" || !path || path.length < 2) {
+      lastSnakeFrameTimeRef.current = null;
+      setSnakeAnimationProgress(0);
+      return;
+    }
+
+    let frameId = 0;
+    lastSnakeFrameTimeRef.current = null;
+    setSnakeAnimationProgress(0);
+
+    const animate = (nextTime: number) => {
+      if (lastSnakeFrameTimeRef.current === null) {
+        lastSnakeFrameTimeRef.current = nextTime;
+      }
+
+      const deltaSeconds = (nextTime - lastSnakeFrameTimeRef.current) / 1000;
+      lastSnakeFrameTimeRef.current = nextTime;
+      setSnakeAnimationProgress((current) => current + deltaSeconds * snakeSpeedRef.current);
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    frameId = window.requestAnimationFrame(animate);
+
+    return () => {
+      lastSnakeFrameTimeRef.current = null;
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [path, pathRenderMode]);
 
   useEffect(() => {
     if (!isPreviewExpanded) {
@@ -341,13 +379,15 @@ export default function App() {
     const nextColumns = baseGrid[0]?.length ?? 0;
     const nextOpenings =
       generatedOpenings.length >= 2 && previousRows > 0 && previousColumns > 0
-        ? generatedOpenings.slice(0, 2).map((opening) =>
-            remapBoundaryOpening(opening, previousRows, previousColumns, nextRows, nextColumns),
+        ? sortBoundaryOpenings(
+            generatedOpenings.slice(0, 2).map((opening) =>
+              remapBoundaryOpening(opening, previousRows, previousColumns, nextRows, nextColumns),
+            ),
           )
         : fallbackOpenings;
     const openings =
       nextOpenings.length >= 2 && !pointsEqual(nextOpenings[0], nextOpenings[1])
-        ? nextOpenings
+        ? sortBoundaryOpenings(nextOpenings)
         : fallbackOpenings;
     const nextMaze = applyBoundaryOpenings(baseGrid, openings);
 
@@ -638,6 +678,14 @@ export default function App() {
                 <button
                   type="button"
                   className="ghost-button"
+                  onClick={() => setIsPreviewExpanded(true)}
+                  disabled={grid.length === 0}
+                >
+                  Åpne stort
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
                   onClick={() => setShowSourcePanels((current) => !current)}
                   disabled={!hasSourceImages}
                 >
@@ -659,16 +707,14 @@ export default function App() {
                 grid={grid}
                 path={showPath ? path : null}
                 pathRenderMode={pathRenderMode}
-                snakeSpeed={snakeSpeed}
+                animationProgress={snakeAnimationProgress}
                 colors={previewColors}
                 openings={openings}
                 showOpeningHandles={showPath}
                 openingsDraggable={sourceMode === "generated"}
                 onMoveOpening={handleMoveOpening}
-                onPreviewClick={() => setIsPreviewExpanded(true)}
                 previewWidth={previewSize?.width}
                 previewHeight={previewSize?.height}
-                className={grid.length > 0 ? "is-clickable" : undefined}
               />
 
               {isPreviewBusy ? (
@@ -742,7 +788,7 @@ export default function App() {
                 grid={grid}
                 path={showPath ? path : null}
                 pathRenderMode={pathRenderMode}
-                snakeSpeed={snakeSpeed}
+                animationProgress={snakeAnimationProgress}
                 colors={previewColors}
                 openings={openings}
                 showOpeningHandles={false}

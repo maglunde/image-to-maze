@@ -155,7 +155,17 @@ export function getBoundaryOpenings(grid: Grid): GridPoint[] {
     }
   }
 
-  return openings;
+  return sortBoundaryOpenings(openings);
+}
+
+export function sortBoundaryOpenings(openings: GridPoint[]): GridPoint[] {
+  return [...openings].sort((left, right) => {
+    if (left.column !== right.column) {
+      return left.column - right.column;
+    }
+
+    return left.row - right.row;
+  });
 }
 
 function getInteriorEntryPoint(grid: Grid, opening: GridPoint): GridPoint | null {
@@ -305,8 +315,9 @@ export function applyBoundaryOpenings(grid: Grid, openings: GridPoint[]): Grid {
   const nextGrid = sealMazeBoundary(grid);
   const rows = nextGrid.length;
   const columns = nextGrid[0].length;
+  const orderedOpenings = sortBoundaryOpenings(openings).slice(0, 2);
 
-  for (const opening of openings.slice(0, 2)) {
+  for (const opening of orderedOpenings) {
     if (isCornerOpening(opening, rows, columns)) {
       continue;
     }
@@ -354,6 +365,6 @@ export function moveBoundaryOpening(
 
   return {
     grid: applyBoundaryOpenings(baseGrid, nextOpenings),
-    openings: nextOpenings,
+    openings: sortBoundaryOpenings(nextOpenings),
   };
 }
