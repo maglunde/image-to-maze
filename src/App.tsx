@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
-import { GridPreview } from "./components/GridPreview";
-import { ImageDropzone } from "./components/ImageDropzone";
+import { useEffect, useRef, useState } from "react";
+import { InputPanel } from "./components/InputPanel";
+import { OutputSidebar } from "./components/OutputSidebar";
+import { PreviewPanel } from "./components/PreviewPanel";
+import { defaultAnalysisOptions, defaultPreviewColors } from "./constants/mazeDefaults";
 import type { AnalysisOptions, Grid, GridPoint, PathRenderMode, PreviewColors } from "./types";
 import {
   exportPdf,
@@ -9,76 +11,11 @@ import {
   getDefaultExportBaseName,
   hasVisiblePathPoint,
 } from "./utils/export";
-import { TILE_SIZE_MAX, TILE_SIZE_MIN, analyzeMazeImage, autoTuneAnalysisOptions } from "./utils/imageProcessing";
 import { formatGridAsAscii, formatGridAsJson, formatGridAsMatrix } from "./utils/grid";
-import {
-  applyBoundaryOpenings,
-  generateMaze,
-  getBoundaryOpenings,
-  moveBoundaryOpening,
-  sealMazeBoundary,
-  sortBoundaryOpenings,
-} from "./utils/mazeGenerator";
+import { buildGeneratedMazeState } from "./utils/generatedMaze";
+import { analyzeMazeImage, autoTuneAnalysisOptions } from "./utils/imageProcessing";
+import { moveBoundaryOpening } from "./utils/mazeGenerator";
 import { findMazePath } from "./utils/pathfinding";
-
-const defaultOptions: AnalysisOptions = {
-  tileSize: 12,
-  threshold: 128,
-  invert: false,
-  normalizePathWidth: true,
-};
-
-const defaultPreviewColors: PreviewColors = {
-  path: "#ef4444",
-  wall: "#0f172a",
-  walkable: "#ecfeff",
-};
-
-function pointsEqual(left: GridPoint, right: GridPoint): boolean {
-  return left.row === right.row && left.column === right.column;
-}
-
-function scaleBoundaryIndex(value: number, previousMax: number, nextMax: number): number {
-  if (previousMax <= 0 || nextMax <= 0) {
-    return 0;
-  }
-
-  return Math.round((value / previousMax) * nextMax);
-}
-
-function remapBoundaryOpening(
-  opening: GridPoint,
-  previousRows: number,
-  previousColumns: number,
-  nextRows: number,
-  nextColumns: number,
-): GridPoint {
-  if (opening.row === 0) {
-    return {
-      row: 0,
-      column: scaleBoundaryIndex(opening.column, previousColumns - 1, nextColumns - 1),
-    };
-  }
-
-  if (opening.row === previousRows - 1) {
-    return {
-      row: nextRows - 1,
-      column: scaleBoundaryIndex(opening.column, previousColumns - 1, nextColumns - 1),
-    };
-  }
-
-  if (opening.column === 0) {
-    return {
-      row: scaleBoundaryIndex(opening.row, previousRows - 1, nextRows - 1),
-      column: 0,
-    };
-  }
-
-  return {
-    row: scaleBoundaryIndex(opening.row, previousRows - 1, nextRows - 1),
-    column: nextColumns - 1,
-  };
-}
 
 export default function App() {
   const [inputTab, setInputTab] = useState<"generate" | "upload">("generate");
@@ -91,7 +28,7 @@ export default function App() {
   const [generatedBaseGrid, setGeneratedBaseGrid] = useState<Grid>([]);
   const [path, setPath] = useState<GridPoint[] | null>(null);
   const [generatedOpenings, setGeneratedOpenings] = useState<GridPoint[]>([]);
-  const [options, setOptions] = useState<AnalysisOptions>(defaultOptions);
+  const [options, setOptions] = useState<AnalysisOptions>(defaultAnalysisOptions);
   const [error, setError] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAutoTuning, setIsAutoTuning] = useState(false);
@@ -319,7 +256,7 @@ export default function App() {
     });
 
     void runAutoTune(nextUrl, {
-      ...defaultOptions,
+      ...defaultAnalysisOptions,
       invert: options.invert,
       normalizePathWidth: options.normalizePathWidth,
     });
@@ -370,26 +307,12 @@ export default function App() {
   };
 
   const handleGenerateMaze = () => {
-    const rawMaze = generateMaze(mazeWidth, mazeHeight);
-    const fallbackOpenings = getBoundaryOpenings(rawMaze).slice(0, 2);
-    const baseGrid = sealMazeBoundary(rawMaze);
-    const previousRows = generatedBaseGrid.length;
-    const previousColumns = generatedBaseGrid[0]?.length ?? 0;
-    const nextRows = baseGrid.length;
-    const nextColumns = baseGrid[0]?.length ?? 0;
-    const nextOpenings =
-      generatedOpenings.length >= 2 && previousRows > 0 && previousColumns > 0
-        ? sortBoundaryOpenings(
-            generatedOpenings.slice(0, 2).map((opening) =>
-              remapBoundaryOpening(opening, previousRows, previousColumns, nextRows, nextColumns),
-            ),
-          )
-        : fallbackOpenings;
-    const openings =
-      nextOpenings.length >= 2 && !pointsEqual(nextOpenings[0], nextOpenings[1])
-        ? sortBoundaryOpenings(nextOpenings)
-        : fallbackOpenings;
-    const nextMaze = applyBoundaryOpenings(baseGrid, openings);
+    const nextMazeState = buildGeneratedMazeState(
+      mazeWidth,
+      mazeHeight,
+      generatedBaseGrid,
+      generatedOpenings,
+    );
 
     setError("");
     setInputTab("generate");
@@ -398,11 +321,11 @@ export default function App() {
     setSourceMode("generated");
     setShowSourcePanels(false);
     setProcessedUrl("");
-    setPreviewSize({ width: nextMaze[0].length, height: nextMaze.length });
-    setGeneratedBaseGrid(baseGrid);
-    setGrid(nextMaze);
-    setPath(findMazePath(nextMaze));
-    setGeneratedOpenings(openings);
+    setPreviewSize({ width: nextMazeState.grid[0].length, height: nextMazeState.grid.length });
+    setGeneratedBaseGrid(nextMazeState.baseGrid);
+    setGrid(nextMazeState.grid);
+    setPath(findMazePath(nextMazeState.grid));
+    setGeneratedOpenings(nextMazeState.openings);
     setImageUrl((previousUrl) => {
       if (previousUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previousUrl);
@@ -458,8 +381,6 @@ export default function App() {
   );
   const asciiGrid = formatGridAsAscii(grid);
   const matrixGrid = formatGridAsMatrix(grid);
-  const gridRows = grid.length;
-  const gridColumns = grid[0]?.length ?? 0;
   const openings = sourceMode === "generated" ? generatedOpenings : [];
   const hasSourceImages = Boolean(imageUrl || processedUrl);
   const isPreviewBusy = sourceMode === "image" && (isProcessing || isAutoTuning);
@@ -479,546 +400,73 @@ export default function App() {
 
       <section className="workspace">
         <aside className="sidebar input-column">
-          <section className="panel controls-panel input-panel">
-            <div className="section-head">
-              <h2>Input</h2>
-            </div>
-
-            <div className="tab-row input-tab-row" role="tablist" aria-label="Input-modus">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={inputTab === "generate"}
-                className={`tab-button ${inputTab === "generate" ? "is-active" : ""}`}
-                aria-controls="input-tab-panel"
-                onClick={() => setInputTab("generate")}
-              >
-                Lag maze
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={inputTab === "upload"}
-                className={`tab-button ${inputTab === "upload" ? "is-active" : ""}`}
-                aria-controls="input-tab-panel"
-                onClick={() => setInputTab("upload")}
-              >
-                Last opp
-              </button>
-            </div>
-
-            <div
-              id="input-tab-panel"
-              role="tabpanel"
-              className={`tab-panel ${inputTab === "generate" ? "is-generate" : "is-upload"}`}
-            >
-              {inputTab === "generate" ? (
-                <div className="sidebar-group">
-                  <label>
-                    <div className="field-head">
-                      <span>Bredde</span>
-                      <strong>{mazeWidth}</strong>
-                    </div>
-                    <input
-                      type="range"
-                      min="5"
-                      max="500"
-                      step="1"
-                      value={mazeWidth}
-                      onChange={(event) => setMazeWidth(Number(event.target.value) || 5)}
-                    />
-                  </label>
-
-                  <label>
-                    <div className="field-head">
-                      <span>Høyde</span>
-                      <strong>{mazeHeight}</strong>
-                    </div>
-                    <input
-                      type="range"
-                      min="5"
-                      max="500"
-                      step="1"
-                      value={mazeHeight}
-                      onChange={(event) => setMazeHeight(Number(event.target.value) || 5)}
-                    />
-                  </label>
-
-                  <button type="button" onClick={handleGenerateMaze}>
-                    Lag maze
-                  </button>
-                </div>
-              ) : (
-                <div className="sidebar-group">
-                  <ImageDropzone hasImage={Boolean(imageUrl)} onFileSelect={handleFileSelect} />
-
-                  {imageUrl ? (
-                    <>
-                      <div className="sidebar-divider" aria-hidden="true" />
-
-                      <div className="sidebar-group">
-                        <p className="sidebar-label">Analyseinnstillinger</p>
-                        <label>
-                          <div className="field-head">
-                            <span className="field-label">
-                              <span>Tile size</span>
-                              <span
-                                className="info-tooltip"
-                                data-tooltip="Hvor store bildepiksler som slås sammen til én grid-celle. Lavere verdi gir mer detalj, høyere verdi gir grovere grid."
-                                aria-label="Info om tile size"
-                              >
-                                i
-                              </span>
-                            </span>
-                            <strong>{options.tileSize}px</strong>
-                          </div>
-                          <input
-                            type="range"
-                            min={TILE_SIZE_MIN}
-                            max={TILE_SIZE_MAX}
-                            value={options.tileSize}
-                            onChange={(event) =>
-                              setOptions((current) => ({
-                                ...current,
-                                tileSize: Number(event.target.value),
-                              }))
-                            }
-                          />
-                        </label>
-
-                        <label>
-                          <div className="field-head">
-                            <span className="field-label">
-                              <span>Threshold</span>
-                              <span
-                                className="info-tooltip"
-                                data-tooltip="Lysstyrkegrensen som avgjør hva som tolkes som vegg eller åpen vei. Lavere verdi gir færre vegger, høyere verdi gir flere."
-                                aria-label="Info om threshold"
-                              >
-                                i
-                              </span>
-                            </span>
-                            <strong>{options.threshold}</strong>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="255"
-                            value={options.threshold}
-                            onChange={(event) =>
-                              setOptions((current) => ({
-                                ...current,
-                                threshold: Number(event.target.value),
-                              }))
-                            }
-                          />
-                        </label>
-
-                        <label className="checkbox">
-                          <input
-                            type="checkbox"
-                            checked={options.invert}
-                            onChange={(event) =>
-                              setOptions((current) => ({
-                                ...current,
-                                invert: event.target.checked,
-                              }))
-                            }
-                          />
-                          <span>Invert</span>
-                        </label>
-
-                        <label className="checkbox">
-                          <input
-                            type="checkbox"
-                            checked={options.normalizePathWidth}
-                            onChange={(event) =>
-                              setOptions((current) => ({
-                                ...current,
-                                normalizePathWidth: event.target.checked,
-                              }))
-                            }
-                          />
-                          <span>1-celle paths</span>
-                        </label>
-
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => imageUrl && void runAutoTune(imageUrl)}
-                          disabled={!imageUrl || isAutoTuning || isProcessing}
-                        >
-                          {isAutoTuning ? "Finner beste innstillinger..." : "Finn beste innstillinger"}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="panel-note">Analyseinnstillinger vises når et bilde er lastet opp.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
+          <InputPanel
+            inputTab={inputTab}
+            onInputTabChange={setInputTab}
+            mazeWidth={mazeWidth}
+            mazeHeight={mazeHeight}
+            onMazeWidthChange={setMazeWidth}
+            onMazeHeightChange={setMazeHeight}
+            onGenerateMaze={handleGenerateMaze}
+            imageUrl={imageUrl}
+            options={options}
+            setOptions={setOptions}
+            onFileSelect={handleFileSelect}
+            onAutoTune={() => imageUrl && void runAutoTune(imageUrl)}
+            isAutoTuning={isAutoTuning}
+            isProcessing={isProcessing}
+          />
 
           {error ? <section className="panel compact-panel error">{error}</section> : null}
         </aside>
 
-        <section className="content preview-column">
-          <section className="panel primary-preview">
-            <div className="section-head primary-head">
-              <div>
-                <h2>Grid Preview</h2>
-                <p className="section-meta">
-                  {gridRows > 0 && gridColumns > 0
-                    ? `${gridRows} x ${gridColumns} cells`
-                    : "Last opp et bilde eller generer et maze for å starte."}
-                </p>
-              </div>
-              <div className="action-row">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setIsPreviewExpanded(true)}
-                  disabled={grid.length === 0}
-                >
-                  Åpne stort
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setShowSourcePanels((current) => !current)}
-                  disabled={!hasSourceImages}
-                >
-                  {showSourcePanels ? "Skjul kilder" : "Vis kilder"}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={handleUseGridAsInput}
-                  disabled={!gridPreviewUrl || isProcessing}
-                >
-                  Bruk som input
-                </button>
-              </div>
-            </div>
+        <PreviewPanel
+          grid={grid}
+          path={path}
+          showPath={showPath}
+          pathRenderMode={pathRenderMode}
+          snakeAnimationProgress={snakeAnimationProgress}
+          previewColors={previewColors}
+          openings={openings}
+          sourceMode={sourceMode}
+          onMoveOpening={handleMoveOpening}
+          previewSize={previewSize}
+          isPreviewBusy={isPreviewBusy}
+          previewStatus={previewStatus}
+          showSourcePanels={showSourcePanels}
+          onShowSourcePanelsChange={setShowSourcePanels}
+          hasSourceImages={hasSourceImages}
+          canUseGridAsInput={Boolean(gridPreviewUrl)}
+          imageUrl={imageUrl}
+          processedUrl={processedUrl}
+          onUseGridAsInput={handleUseGridAsInput}
+          onUseProcessedAsInput={handleUseProcessedAsInput}
+          isProcessing={isProcessing}
+          isPreviewExpanded={isPreviewExpanded}
+          onPreviewExpandedChange={setIsPreviewExpanded}
+        />
 
-            <div className="preview-stage">
-              <GridPreview
-                grid={grid}
-                path={showPath ? path : null}
-                pathRenderMode={pathRenderMode}
-                animationProgress={snakeAnimationProgress}
-                colors={previewColors}
-                openings={openings}
-                showOpeningHandles={showPath}
-                openingsDraggable={sourceMode === "generated"}
-                onMoveOpening={handleMoveOpening}
-                previewWidth={previewSize?.width}
-                previewHeight={previewSize?.height}
-              />
-
-              {isPreviewBusy ? (
-                <div className="preview-processing-overlay">
-                  <div className="processing-chip">
-                    <span className="processing-dot" aria-hidden="true" />
-                    {previewStatus}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          {showSourcePanels && hasSourceImages ? (
-            <section className="source-strip">
-              {imageUrl ? (
-                <article className="panel collapsible-panel source-card">
-                  <div className="section-head">
-                    <h2>Original</h2>
-                  </div>
-                  <img src={imageUrl} alt="Original maze upload" className="preview-image" />
-                </article>
-              ) : null}
-
-              {processedUrl ? (
-                <article className="panel collapsible-panel source-card">
-                  <div className="section-head">
-                    <h2>Processed B/W</h2>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={handleUseProcessedAsInput}
-                      disabled={!processedUrl || isProcessing}
-                    >
-                      Bruk som input
-                    </button>
-                  </div>
-                  <img src={processedUrl} alt="Processed maze" className="preview-image" />
-                </article>
-              ) : null}
-            </section>
-          ) : null}
-        </section>
-
-        {isPreviewExpanded && grid.length > 0 ? (
-          <div
-            className="preview-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Stor grid preview"
-            onClick={() => setIsPreviewExpanded(false)}
-          >
-            <div className="preview-modal-dialog" onClick={(event) => event.stopPropagation()}>
-              <div className="section-head preview-modal-head">
-                <div>
-                  <h2>Grid Preview</h2>
-                  <p className="section-meta">
-                    {gridRows > 0 && gridColumns > 0 ? `${gridRows} x ${gridColumns} cells` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setIsPreviewExpanded(false)}
-                >
-                  Lukk
-                </button>
-              </div>
-
-              <GridPreview
-                grid={grid}
-                path={showPath ? path : null}
-                pathRenderMode={pathRenderMode}
-                animationProgress={snakeAnimationProgress}
-                colors={previewColors}
-                openings={openings}
-                showOpeningHandles={false}
-                openingsDraggable={false}
-                previewWidth={previewSize?.width}
-                previewHeight={previewSize?.height}
-                className="is-expanded"
-              />
-            </div>
-          </div>
-        ) : null}
-
-        <aside className="output-column">
-          <section className="panel controls-panel">
-            <div className="section-head">
-              <h2>Visning</h2>
-            </div>
-
-            <button
-              type="button"
-              className={`toggle-button ${showPath ? "is-active" : ""}`}
-              aria-pressed={showPath}
-              onClick={() => setShowPath((current) => !current)}
-            >
-              <span>Show path</span>
-              <span className="toggle-pill" aria-hidden="true">
-                <span className="toggle-thumb" />
-              </span>
-            </button>
-
-            <div className="display-mode-row" role="group" aria-label="Path-tegning">
-              <span className="display-mode-label">Path-tegning</span>
-              <div className="display-mode-group">
-                <button
-                  type="button"
-                  className={`display-mode-button ${pathRenderMode === "center" ? "is-active" : ""}`}
-                  onClick={() => setPathRenderMode("center")}
-                >
-                  Rett
-                </button>
-                <button
-                  type="button"
-                  className={`display-mode-button ${pathRenderMode === "snake" ? "is-active" : ""}`}
-                  onClick={() => setPathRenderMode("snake")}
-                >
-                  Slange
-                </button>
-              </div>
-            </div>
-
-            {pathRenderMode === "snake" ? (
-              <label>
-                <div className="field-head">
-                  <span>Slangefart</span>
-                  <strong>{snakeSpeed}</strong>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="1000"
-                  step="1"
-                  value={snakeSpeed}
-                  onChange={(event) => setSnakeSpeed(Number(event.target.value))}
-                />
-              </label>
-            ) : null}
-
-            <div className="swatch-grid">
-              <label className="swatch-field">
-                <input
-                  type="color"
-                  aria-label="Path-farge"
-                  value={previewColors.path}
-                  onChange={(event) =>
-                    setPreviewColors((current) => ({
-                      ...current,
-                      path: event.target.value,
-                    }))
-                  }
-                />
-                <span>Path</span>
-              </label>
-
-              <label className="swatch-field">
-                <input
-                  type="color"
-                  aria-label="Veggfarge"
-                  value={previewColors.wall}
-                  onChange={(event) =>
-                    setPreviewColors((current) => ({
-                      ...current,
-                      wall: event.target.value,
-                    }))
-                  }
-                />
-                <span>Vegger</span>
-              </label>
-
-              <label className="swatch-field">
-                <input
-                  type="color"
-                  aria-label="Farge for åpen vei"
-                  value={previewColors.walkable}
-                  onChange={(event) =>
-                    setPreviewColors((current) => ({
-                      ...current,
-                      walkable: event.target.value,
-                    }))
-                  }
-                />
-                <span>Åpen vei</span>
-              </label>
-            </div>
-          </section>
-
-          <section className="panel controls-panel">
-            <div className="section-head">
-              <h2>Eksport</h2>
-            </div>
-
-            <div className="export-grid">
-              <button
-                type="button"
-                className="ghost-button export-button"
-                onClick={() => void handleExport("svg")}
-                disabled={grid.length === 0 || isExporting}
-              >
-                SVG
-              </button>
-              <button
-                type="button"
-                className="ghost-button export-button"
-                onClick={() => void handleExport("png")}
-                disabled={grid.length === 0 || isExporting}
-              >
-                PNG
-              </button>
-              <button
-                type="button"
-                className="ghost-button export-button"
-                onClick={() => void handleExport("pdf")}
-                disabled={grid.length === 0 || isExporting}
-              >
-                PDF
-              </button>
-            </div>
-
-            <p className="panel-note">
-              Eksporterer dagens visning med valgte farger{showPath && path ? " og path" : ""}.
-            </p>
-          </section>
-
-          <section className="results-stack">
-            <details className="panel output-panel matrix-panel">
-              <summary className="output-header matrix-summary">
-                <div className="summary-title">
-                  <span className="summary-caret" aria-hidden="true" />
-                  <h2>ASCII</h2>
-                </div>
-                <div className="summary-actions">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void copyToClipboard(asciiGrid, "Kunne ikke kopiere ASCII til utklippstavlen.");
-                    }}
-                    disabled={grid.length === 0}
-                  >
-                    Kopier
-                  </button>
-                </div>
-              </summary>
-              <pre className="ascii-output" style={{ "--ascii-path-color": previewColors.path } as CSSProperties}>
-                {grid.length === 0
-                  ? "Ingen ASCII tilgjengelig ennå."
-                  : grid.map((row, rowIndex) => (
-                      <Fragment key={rowIndex}>
-                        {row.map((cell, columnIndex) => {
-                          const key = `${rowIndex}:${columnIndex}`;
-
-                          if (cell === 1) {
-                            return "#";
-                          }
-
-                          if (pathPoints.has(key)) {
-                            return (
-                              <span key={key} className="ascii-path-dot">
-                                .
-                              </span>
-                            );
-                          }
-
-                          return ".";
-                        })}
-                        {rowIndex < grid.length - 1 ? "\n" : null}
-                      </Fragment>
-                    ))}
-              </pre>
-              <p className="output-note">`#` vegg, `.` gang, farget `.` sti.</p>
-            </details>
-
-            <details className="panel output-panel matrix-panel">
-              <summary className="output-header matrix-summary">
-                <div className="summary-title">
-                  <span className="summary-caret" aria-hidden="true" />
-                  <h2>Grid Matrix</h2>
-                </div>
-                <div className="summary-actions">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void copyToClipboard(
-                        formatGridAsJson(grid),
-                        "Kunne ikke kopiere grid til utklippstavlen.",
-                      );
-                    }}
-                    disabled={grid.length === 0}
-                  >
-                    Kopier
-                  </button>
-                </div>
-              </summary>
-              <pre className="matrix-output">{matrixGrid || "Ingen grid tilgjengelig ennå."}</pre>
-              <p className="output-note">Vises som matrise for lesbarhet, kopieres som gyldig 2D-array.</p>
-            </details>
-          </section>
-        </aside>
+        <OutputSidebar
+          showPath={showPath}
+          onShowPathChange={setShowPath}
+          pathRenderMode={pathRenderMode}
+          onPathRenderModeChange={setPathRenderMode}
+          snakeSpeed={snakeSpeed}
+          onSnakeSpeedChange={setSnakeSpeed}
+          previewColors={previewColors}
+          setPreviewColors={setPreviewColors}
+          grid={grid}
+          isExporting={isExporting}
+          onExport={handleExport}
+          path={path}
+          asciiGrid={asciiGrid}
+          matrixGrid={matrixGrid}
+          pathPoints={pathPoints}
+          onCopyAscii={() => void copyToClipboard(asciiGrid, "Kunne ikke kopiere ASCII til utklippstavlen.")}
+          onCopyGridJson={() =>
+            void copyToClipboard(formatGridAsJson(grid), "Kunne ikke kopiere grid til utklippstavlen.")
+          }
+        />
       </section>
     </main>
   );

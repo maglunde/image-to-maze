@@ -27,7 +27,7 @@ function getExportSize(grid: Grid, cellSize = EXPORT_CELL_SIZE): { width: number
   };
 }
 
-function buildSvgMarkup(
+export function buildSvgMarkup(
   grid: Grid,
   path: GridPoint[] | null,
   colors: PreviewColors,
