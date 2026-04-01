@@ -42,7 +42,7 @@ export function InputPanel({
         <h2>Input</h2>
       </div>
 
-      <div className="tab-row input-tab-row" role="tablist" aria-label="Input-modus">
+      <div className="tab-row input-tab-row" role="tablist" aria-label="Input mode">
         <button
           type="button"
           role="tab"
@@ -51,7 +51,7 @@ export function InputPanel({
           aria-controls="input-tab-panel"
           onClick={() => onInputTabChange("generate")}
         >
-          Lag maze
+          Generate maze
         </button>
         <button
           type="button"
@@ -61,7 +61,7 @@ export function InputPanel({
           aria-controls="input-tab-panel"
           onClick={() => onInputTabChange("upload")}
         >
-          Last opp
+          Upload
         </button>
       </div>
 
@@ -74,7 +74,7 @@ export function InputPanel({
           <div className="sidebar-group">
             <label>
               <div className="field-head">
-                <span>Bredde</span>
+                <span>Width</span>
                 <strong>{mazeWidth}</strong>
               </div>
               <input
@@ -89,7 +89,7 @@ export function InputPanel({
 
             <label>
               <div className="field-head">
-                <span>Høyde</span>
+                <span>Height</span>
                 <strong>{mazeHeight}</strong>
               </div>
               <input
@@ -103,7 +103,7 @@ export function InputPanel({
             </label>
 
             <button type="button" onClick={onGenerateMaze}>
-              Lag maze
+              Generate maze
             </button>
           </div>
         ) : (
@@ -115,15 +115,15 @@ export function InputPanel({
                 <div className="sidebar-divider" aria-hidden="true" />
 
                 <div className="sidebar-group">
-                  <p className="sidebar-label">Analyseinnstillinger</p>
+                  <p className="sidebar-label">Analysis settings</p>
                   <label>
                     <div className="field-head">
                       <span className="field-label">
                         <span>Tile size</span>
                         <span
                           className="info-tooltip"
-                          data-tooltip="Hvor store bildepiksler som slås sammen til én grid-celle. Lavere verdi gir mer detalj, høyere verdi gir grovere grid."
-                          aria-label="Info om tile size"
+                          data-tooltip="How many image pixels are merged into one grid cell. Lower values give more detail, higher values give a coarser grid."
+                          aria-label="Tile size info"
                         >
                           i
                         </span>
@@ -150,8 +150,8 @@ export function InputPanel({
                         <span>Threshold</span>
                         <span
                           className="info-tooltip"
-                          data-tooltip="Lysstyrkegrensen som avgjør hva som tolkes som vegg eller åpen vei. Lavere verdi gir færre vegger, høyere verdi gir flere."
-                          aria-label="Info om threshold"
+                          data-tooltip="The brightness cutoff used to classify walls versus open paths. Lower values produce fewer walls, higher values produce more."
+                          aria-label="Threshold info"
                         >
                           i
                         </span>
@@ -197,7 +197,7 @@ export function InputPanel({
                         }))
                       }
                     />
-                    <span>1-celle paths</span>
+                    <span>1-cell paths</span>
                   </label>
 
                   <button
@@ -206,13 +206,13 @@ export function InputPanel({
                     onClick={onAutoTune}
                     disabled={!imageUrl || isAutoTuning || isProcessing}
                   >
-                    {isAutoTuning ? "Finner beste innstillinger..." : "Finn beste innstillinger"}
+                    {isAutoTuning ? "Finding best settings..." : "Find best settings"}
                   </button>
 
                 </div>
               </>
             ) : (
-              <p className="panel-note">Analyseinnstillinger vises når et bilde er lastet opp.</p>
+              <p className="panel-note">Analysis settings appear after you upload an image.</p>
             )}
           </div>
         )}

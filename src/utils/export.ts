@@ -158,7 +158,7 @@ function blobFromCanvas(canvas: HTMLCanvasElement, type: string, quality?: numbe
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        reject(new Error("Kunne ikke opprette eksportfil."));
+        reject(new Error("Could not create export file."));
         return;
       }
 

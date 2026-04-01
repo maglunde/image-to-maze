@@ -41,11 +41,11 @@ export function ImageDropzone({ hasImage, onFileSelect }: ImageDropzoneProps) {
       />
       <div className="dropzone" onDrop={onDrop} onDragOver={onDragOver}>
         <div>
-          <strong>{hasImage ? "Bytt maze-bilde" : "Last opp maze-bilde"}</strong>
-          <p>Dra inn fil eller bruk knappen.</p>
+          <strong>{hasImage ? "Replace maze image" : "Upload maze image"}</strong>
+          <p>Drag in a file or use the button.</p>
         </div>
         <button type="button" onClick={() => inputRef.current?.click()}>
-          {hasImage ? "Velg nytt" : "Velg fil"}
+          {hasImage ? "Choose new file" : "Choose file"}
         </button>
       </div>
     </>

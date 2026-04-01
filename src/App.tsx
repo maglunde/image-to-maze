@@ -90,7 +90,7 @@ export default function App() {
       } catch (analysisError) {
         if (!cancelled) {
           setError(
-            analysisError instanceof Error ? analysisError.message : "Ukjent feil under prosessering.",
+            analysisError instanceof Error ? analysisError.message : "Unknown processing error.",
           );
           setProcessedUrl("");
           setGridPreviewUrl("");
@@ -220,7 +220,7 @@ export default function App() {
     return autoTuneAnalysisOptions(targetImageUrl, baseOptions)
       .then((nextOptions) => {
         if (!nextOptions) {
-          setError("Fant ingen gyldig maze med auto-innstillingene.");
+          setError("No valid maze found with the auto-tuned settings.");
           setOptions(baseOptions);
           return;
         }
@@ -229,7 +229,7 @@ export default function App() {
       })
       .catch(() => {
         setOptions(baseOptions);
-        setError("Auto-innstilling feilet.");
+        setError("Auto-tune failed.");
       })
       .finally(() => {
         setIsAutoTuning(false);
@@ -361,7 +361,7 @@ export default function App() {
 
       await exportPdf(grid, exportPath, previewColors, pathRenderMode, `${baseName}.pdf`);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "Kunne ikke eksportere maze.");
+      setError(exportError instanceof Error ? exportError.message : "Could not export maze.");
     } finally {
       setIsExporting(false);
     }
@@ -387,8 +387,8 @@ export default function App() {
   const hasSourceImages = Boolean(imageUrl || processedUrl);
   const isPreviewBusy = sourceMode === "image" && (isProcessing || isAutoTuning);
   const previewStatus = isAutoTuning
-    ? "Finner gode standardinnstillinger for bildet..."
-    : "Prosesserer bilde...";
+    ? "Finding good default settings for the image..."
+    : "Processing image...";
 
   return (
     <main className="app-shell">
@@ -396,7 +396,7 @@ export default function App() {
         <div className="hero-copy">
           <p className="eyebrow">Client-side maze analysis</p>
           <h1>Maze Image To Grid</h1>
-          <p>Last opp et maze-bilde og få et grid der `1 = wall` og `0 = walkable` uten backend.</p>
+          <p>Upload a maze image and get a grid where `1 = wall` and `0 = walkable` without a backend.</p>
         </div>
       </section>
 
@@ -464,9 +464,9 @@ export default function App() {
           asciiGrid={asciiGrid}
           matrixGrid={matrixGrid}
           pathPoints={pathPoints}
-          onCopyAscii={() => void copyToClipboard(asciiGrid, "Kunne ikke kopiere ASCII til utklippstavlen.")}
+          onCopyAscii={() => void copyToClipboard(asciiGrid, "Could not copy ASCII to the clipboard.")}
           onCopyGridJson={() =>
-            void copyToClipboard(formatGridAsJson(grid), "Kunne ikke kopiere grid til utklippstavlen.")
+            void copyToClipboard(formatGridAsJson(grid), "Could not copy the grid to the clipboard.")
           }
         />
       </section>

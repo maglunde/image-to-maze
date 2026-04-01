@@ -1,89 +1,89 @@
 # image-to-maze
 
-Client-side React-app for å laste opp eller generere mazes, analysere dem til et grid, finne en løsning, og eksportere resultatet.
+A client-side React app for uploading or generating mazes, analyzing them into a grid, finding a solution, and exporting the result.
 
-## Hva appen gjør
+## What the app does
 
-- Laster opp maze-bilder og analyserer dem til et grid der `1 = wall` og `0 = walkable`
-- Genererer nye mazes direkte i nettleseren
-- Finner path mellom boundary-åpninger
-- Viser resultatet som:
+- Uploads maze images and analyzes them into a grid where `1 = wall` and `0 = walkable`
+- Generates new mazes directly in the browser
+- Finds a path between boundary openings
+- Shows the result as:
   - `Grid Preview`
   - `ASCII`
   - `Grid Matrix`
-- Lar deg justere visning med farger, path-visning og animert `Slange`-modus
-- Eksporterer som `SVG`, `PNG` og `PDF`
+- Lets you adjust the display with colors, path visibility, and animated `Snake` mode
+- Exports as `SVG`, `PNG`, and `PDF`
 
-Alt kjører i browseren. Det er ingen backend.
+Everything runs in the browser. There is no backend.
 
-## Lokal kjøring
+## Local development
 
-Krav:
+Requirements:
 
 - Node.js
 - npm
 
-Installer avhengigheter:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Start dev-server:
+Start the dev server:
 
 ```bash
 npm start
 ```
 
-Bygg produksjonsversjon:
+Build the production version:
 
 ```bash
 npm run build
 ```
 
-Forhåndsvis build lokalt:
+Preview the build locally:
 
 ```bash
 npm run preview
 ```
 
-## Bruk
+## Usage
 
-### Last opp
+### Upload
 
-Bruk `Last opp` for å analysere et maze-bilde. Når et bilde er lastet opp kan du justere:
+Use `Upload` to analyze a maze image. After an image is uploaded you can adjust:
 
 - `Tile size`
 - `Threshold`
 - `Invert`
-- `1-celle paths`
+- `1-cell paths`
 
-Du kan også bruke `Finn beste innstillinger` for automatisk tuning.
+You can also use `Find best settings` for automatic tuning.
 
-### Lag maze
+### Generate maze
 
-Bruk `Lag maze` for å generere en ny maze med valgt bredde og høyde. Boundary-åpninger kan flyttes i previewen.
+Use `Generate maze` to create a new maze with the selected width and height. Boundary openings can be moved in the preview.
 
-## Visning
+## Display
 
-`Visning`-panelet styrer hvordan løsningen presenteres:
+The `Display` panel controls how the solution is presented:
 
 - `Show path`
-- `Path-tegning`
-  - `Rett`
-  - `Slange`
-- `Slangefart` når `Slange` er valgt
-- farger for path, vegger og åpen vei
+- `Path rendering`
+  - `Straight`
+  - `Snake`
+- `Snake speed` when `Snake` is selected
+- colors for the path, walls, and open path
 
-## Eksport
+## Export
 
-Eksport bruker dagens visning og tilgjengelig path:
+Export uses the current view and available path:
 
 - `SVG`
 - `PNG`
 - `PDF`
 
-Eksporten legger også på en åpen padding rundt maze-et.
+The export also adds open padding around the maze.
 
 ## Stack
 

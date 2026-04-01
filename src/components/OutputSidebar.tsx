@@ -44,7 +44,7 @@ export function OutputSidebar({
     <aside className="output-column">
       <section className="panel controls-panel">
         <div className="section-head">
-          <h2>Visning</h2>
+          <h2>Display</h2>
         </div>
 
         <button
@@ -59,22 +59,22 @@ export function OutputSidebar({
           </span>
         </button>
 
-        <div className="display-mode-row" role="group" aria-label="Path-tegning">
-          <span className="display-mode-label">Path-tegning</span>
+        <div className="display-mode-row" role="group" aria-label="Path rendering">
+          <span className="display-mode-label">Path rendering</span>
           <div className="display-mode-group">
             <button
               type="button"
               className={`display-mode-button ${pathRenderMode === "center" ? "is-active" : ""}`}
               onClick={() => onPathRenderModeChange("center")}
             >
-              Rett
+              Straight
             </button>
             <button
               type="button"
               className={`display-mode-button ${pathRenderMode === "snake" ? "is-active" : ""}`}
               onClick={() => onPathRenderModeChange("snake")}
             >
-              Slange
+              Snake
             </button>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function OutputSidebar({
         {pathRenderMode === "snake" ? (
           <label>
             <div className="field-head">
-              <span>Slangefart</span>
+              <span>Snake speed</span>
               <strong>{snakeSpeed}</strong>
             </div>
             <input
@@ -100,7 +100,7 @@ export function OutputSidebar({
           <label className="swatch-field">
             <input
               type="color"
-              aria-label="Path-farge"
+              aria-label="Path color"
               value={previewColors.path}
               onChange={(event) =>
                 setPreviewColors((current) => ({
@@ -115,7 +115,7 @@ export function OutputSidebar({
           <label className="swatch-field">
             <input
               type="color"
-              aria-label="Veggfarge"
+              aria-label="Wall color"
               value={previewColors.wall}
               onChange={(event) =>
                 setPreviewColors((current) => ({
@@ -124,13 +124,13 @@ export function OutputSidebar({
                 }))
               }
             />
-            <span>Vegger</span>
+            <span>Walls</span>
           </label>
 
           <label className="swatch-field">
             <input
               type="color"
-              aria-label="Farge for åpen vei"
+              aria-label="Open path color"
               value={previewColors.walkable}
               onChange={(event) =>
                 setPreviewColors((current) => ({
@@ -139,14 +139,14 @@ export function OutputSidebar({
                 }))
               }
             />
-            <span>Åpen vei</span>
+            <span>Open path</span>
           </label>
         </div>
       </section>
 
       <section className="panel controls-panel">
         <div className="section-head">
-          <h2>Eksport</h2>
+          <h2>Export</h2>
         </div>
 
         <div className="export-grid">
@@ -177,7 +177,7 @@ export function OutputSidebar({
         </div>
 
         <p className="panel-note">
-          Eksporterer dagens visning med valgte farger{showPath && path ? " og path" : ""}.
+          Exports the current view with the selected colors{showPath && path ? " and path" : ""}.
         </p>
       </section>
 
@@ -198,13 +198,13 @@ export function OutputSidebar({
                 }}
                 disabled={grid.length === 0}
               >
-                Kopier
+                Copy
               </button>
             </div>
           </summary>
           <pre className="ascii-output" style={{ "--ascii-path-color": previewColors.path } as CSSProperties}>
             {grid.length === 0
-              ? "Ingen ASCII tilgjengelig ennå."
+              ? "No ASCII available yet."
               : grid.map((row, rowIndex) => (
                   <Fragment key={rowIndex}>
                     {row.map((cell, columnIndex) => {
@@ -228,14 +228,14 @@ export function OutputSidebar({
                   </Fragment>
                 ))}
           </pre>
-          <p className="output-note">`#` vegg, `.` gang, farget `.` sti.</p>
+          <p className="output-note">`#` wall, `.` path, highlighted `.` solution path.</p>
         </details>
 
         <details className="panel output-panel matrix-panel">
           <summary className="output-header matrix-summary">
             <div className="summary-title">
               <span className="summary-caret" aria-hidden="true" />
-              <h2>Grid Matrix</h2>
+                  <h2>Grid Matrix</h2>
             </div>
             <div className="summary-actions">
               <button
@@ -247,12 +247,12 @@ export function OutputSidebar({
                 }}
                 disabled={grid.length === 0}
               >
-                Kopier
+                Copy
               </button>
             </div>
           </summary>
-          <pre className="matrix-output">{matrixGrid || "Ingen grid tilgjengelig ennå."}</pre>
-          <p className="output-note">Vises som matrise for lesbarhet, kopieres som gyldig 2D-array.</p>
+          <pre className="matrix-output">{matrixGrid || "No grid available yet."}</pre>
+          <p className="output-note">Shown as a matrix for readability and copied as a valid 2D array.</p>
         </details>
       </section>
     </aside>

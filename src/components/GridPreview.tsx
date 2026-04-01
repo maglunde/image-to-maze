@@ -377,7 +377,7 @@ export function GridPreview({
   }, [activeOpeningIndex, onMoveOpening, openingsDraggable, rows, columns]);
 
   if (!hasGrid) {
-    return <div className="empty-state">Ingen grid tilgjengelig ennå.</div>;
+    return <div className="empty-state">No grid available yet.</div>;
   }
 
   return (
@@ -451,7 +451,7 @@ export function GridPreview({
                   className={`opening-handle ${activeOpeningIndex === index ? "is-dragging" : ""}`}
                   style={markerStyle}
                   onPointerDown={() => setActiveOpeningIndex(index)}
-                  title={index === 0 ? "Dra inngangen" : "Dra utgangen"}
+                  title={index === 0 ? "Drag entrance" : "Drag exit"}
                 />
               );
             })

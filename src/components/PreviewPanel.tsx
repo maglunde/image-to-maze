@@ -64,7 +64,7 @@ export function PreviewPanel({
             <p className="section-meta">
               {gridRows > 0 && gridColumns > 0
                 ? `${gridRows} x ${gridColumns} cells`
-                : "Last opp et bilde eller generer et maze for å starte."}
+                : "Upload an image or generate a maze to get started."}
             </p>
           </div>
           <div className="action-row">
@@ -74,7 +74,7 @@ export function PreviewPanel({
               onClick={() => onPreviewExpandedChange(true)}
               disabled={grid.length === 0}
             >
-              Åpne stort
+              Open large
             </button>
             <button
               type="button"
@@ -82,7 +82,7 @@ export function PreviewPanel({
               onClick={() => onShowSourcePanelsChange(!showSourcePanels)}
               disabled={!hasSourceImages}
             >
-              {showSourcePanels ? "Skjul kilder" : "Vis kilder"}
+              {showSourcePanels ? "Hide sources" : "Show sources"}
             </button>
             <button
               type="button"
@@ -90,7 +90,7 @@ export function PreviewPanel({
               onClick={onUseGridAsInput}
               disabled={!canUseGridAsInput || isProcessing}
             >
-              Bruk som input
+              Use as input
             </button>
           </div>
         </div>
@@ -142,7 +142,7 @@ export function PreviewPanel({
                   onClick={onUseProcessedAsInput}
                   disabled={!processedUrl || isProcessing}
                 >
-                  Bruk som input
+                  Use as input
                 </button>
               </div>
               <img src={processedUrl} alt="Processed maze" className="preview-image" />
@@ -156,7 +156,7 @@ export function PreviewPanel({
           className="preview-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="Stor grid preview"
+          aria-label="Large grid preview"
           onClick={() => onPreviewExpandedChange(false)}
         >
           <div className="preview-modal-dialog" onClick={(event) => event.stopPropagation()}>
@@ -172,7 +172,7 @@ export function PreviewPanel({
                 className="ghost-button"
                 onClick={() => onPreviewExpandedChange(false)}
               >
-                Lukk
+                Close
               </button>
             </div>
 
