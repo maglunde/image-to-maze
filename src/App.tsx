@@ -276,6 +276,7 @@ export default function App() {
     }
 
     setError("");
+    setInputTab("upload");
     setGrid([]);
     setSourceMode("image");
     void runAutoTune(processedUrl);
@@ -294,6 +295,7 @@ export default function App() {
     }
 
     setError("");
+    setInputTab("upload");
     setGrid([]);
     setSourceMode("image");
     void runAutoTune(gridPreviewUrl);

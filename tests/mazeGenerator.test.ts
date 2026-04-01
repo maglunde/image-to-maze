@@ -6,6 +6,7 @@ import {
   getBoundaryOpenings,
   moveBoundaryOpening,
   sealMazeBoundary,
+  sortBoundaryOpenings,
 } from "../src/utils/mazeGenerator";
 
 describe("mazeGenerator", () => {
@@ -42,5 +43,21 @@ describe("mazeGenerator", () => {
     const moved = moveBoundaryOpening(base, openings, 0, { row: 0, column: 0 });
 
     expect(moved.openings).toEqual(openings);
+  });
+
+  it("sorts openings with top, then left, then right, then bottom priority", () => {
+    const openings = [
+      { row: 6, column: 3 },
+      { row: 2, column: 0 },
+      { row: 1, column: 6 },
+      { row: 0, column: 4 },
+    ];
+
+    expect(sortBoundaryOpenings(openings, 7, 7)).toEqual([
+      { row: 0, column: 4 },
+      { row: 2, column: 0 },
+      { row: 1, column: 6 },
+      { row: 6, column: 3 },
+    ]);
   });
 });

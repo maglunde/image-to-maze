@@ -1,4 +1,5 @@
 import type { Grid, GridPoint } from "../types";
+import { sortBoundaryOpenings } from "./boundaryOpenings";
 
 type MazeFrame = {
   top: number;
@@ -125,10 +126,14 @@ function scoreFrame(
     right,
     bottom,
     left,
-    openings: [
-      getRepresentativePoint(openingGroups[0]),
-      getRepresentativePoint(openingGroups[1]),
-    ],
+    openings: sortBoundaryOpenings(
+      [
+        getRepresentativePoint(openingGroups[0]),
+        getRepresentativePoint(openingGroups[1]),
+      ],
+      grid.length,
+      grid[0]?.length ?? 0,
+    ) as [GridPoint, GridPoint],
   };
 }
 

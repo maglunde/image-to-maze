@@ -37,4 +37,24 @@ describe("findMazePath", () => {
 
     expect(findMazePath(grid)).toBeNull();
   });
+
+  it("starts from the left opening when there is no top opening", () => {
+    const grid = [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 0, 1, 1, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ];
+
+    const path = findMazePath(grid);
+
+    expect(path).not.toBeNull();
+    expect(path?.[0]).toEqual({ row: 1, column: 0 });
+    expect(path?.at(-1)).toEqual({ row: 7, column: 8 });
+  });
 });

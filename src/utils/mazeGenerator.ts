@@ -1,5 +1,6 @@
 import type { Grid } from "../types";
 import type { GridPoint } from "../types";
+import { sortBoundaryOpenings as sortBoundaryOpeningsWithPriority } from "./boundaryOpenings";
 
 function normalizeDimension(value: number): number {
   const safe = Math.min(500, Math.max(5, Math.floor(value)));
@@ -155,17 +156,24 @@ export function getBoundaryOpenings(grid: Grid): GridPoint[] {
     }
   }
 
-  return sortBoundaryOpenings(openings);
+  return sortBoundaryOpenings(openings, rows, columns);
 }
 
-export function sortBoundaryOpenings(openings: GridPoint[]): GridPoint[] {
-  return [...openings].sort((left, right) => {
-    if (left.column !== right.column) {
-      return left.column - right.column;
-    }
+export function sortBoundaryOpenings(
+  openings: GridPoint[],
+  rows?: number,
+  columns?: number,
+): GridPoint[] {
+  if (openings.length === 0) {
+    return [];
+  }
 
-    return left.row - right.row;
-  });
+  const inferredRows =
+    rows ?? Math.max(...openings.map((opening) => opening.row)) + 1;
+  const inferredColumns =
+    columns ?? Math.max(...openings.map((opening) => opening.column)) + 1;
+
+  return sortBoundaryOpeningsWithPriority(openings, inferredRows, inferredColumns);
 }
 
 function getInteriorEntryPoint(grid: Grid, opening: GridPoint): GridPoint | null {
@@ -315,7 +323,7 @@ export function applyBoundaryOpenings(grid: Grid, openings: GridPoint[]): Grid {
   const nextGrid = sealMazeBoundary(grid);
   const rows = nextGrid.length;
   const columns = nextGrid[0].length;
-  const orderedOpenings = sortBoundaryOpenings(openings).slice(0, 2);
+  const orderedOpenings = sortBoundaryOpenings(openings, rows, columns).slice(0, 2);
 
   for (const opening of orderedOpenings) {
     if (isCornerOpening(opening, rows, columns)) {
@@ -365,6 +373,6 @@ export function moveBoundaryOpening(
 
   return {
     grid: applyBoundaryOpenings(baseGrid, nextOpenings),
-    openings: sortBoundaryOpenings(nextOpenings),
+    openings: sortBoundaryOpenings(nextOpenings, rows, columns),
   };
 }

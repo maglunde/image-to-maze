@@ -70,6 +70,8 @@ export function resolveGeneratedOpenings(
           previousOpenings.slice(0, 2).map((opening) =>
             remapBoundaryOpening(opening, previousRows, previousColumns, nextRows, nextColumns),
           ),
+          nextRows,
+          nextColumns,
         )
       : fallbackOpenings;
 
@@ -77,7 +79,7 @@ export function resolveGeneratedOpenings(
     return fallbackOpenings;
   }
 
-  return sortBoundaryOpenings(nextOpenings);
+  return sortBoundaryOpenings(nextOpenings, nextRows, nextColumns);
 }
 
 export function buildGeneratedMazeState(
